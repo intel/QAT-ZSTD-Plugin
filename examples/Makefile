@@ -25,13 +25,16 @@ default: test
 
 all: test
 
-test: ../src/qatmatchfinder.c test.c $(LIBZSTD)
+test: ../src/qatmatchfinder.o test.c $(LIBZSTD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(QATFLAGS)  $^ $(LDFLAGS) -o $@
 
 .PHONY: $(LIBZSTD)
 $(LIBZSTD):
 	$(CP) -r ../src/qatmatchfinder* $(EXMATCHFINDER)
 	$(MAKE) -C $(LIBDIR) libzstd.a CFLAGS="$(CFLAGS) $(QATFLAGS)"
+
+%.o: %.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(QATFLAGS) $(LDFLAGS) -c $< -o $@
 
 clean:
 	$(RM) *.o
