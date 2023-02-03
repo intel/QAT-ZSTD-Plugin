@@ -32,27 +32,58 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  ***************************************************************************/
- 
+
 /**
  *****************************************************************************
  *      Dependencies
  *****************************************************************************/
-#include "qatmatchfinder.h"
+#define ZSTD_STATIC_LINKING_ONLY
+#include "zstd.h"
 
-/**
- *****************************************************************************
- *      Global variable
- *****************************************************************************/
-ZSTD_QAT_ProcessData_T gProcess = {
-    .qzstdInitStatus = ZSTD_QAT_FAIL,
-    .mutex = PTHREAD_MUTEX_INITIALIZER,
-    .cctxNum = 0,
-};
+#include <assert.h>
+#include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <signal.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <limits.h> /* INT_MAX */
+#include <string.h> /* memset */
 
-/**
- *****************************************************************************
- *      Macro
- *****************************************************************************/
+#include "cpa.h"
+#include "cpa_dc.h"
+#include "icp_sal_poll.h"
+#include "icp_sal_user.h"
+
+#ifdef ENABLE_USDM_DRV
+#include "qae_mem.h"
+#endif
+
+#define ZSTD_QAT_COMP_LVL_DEFAULT               (1)
+#define ZSTD_QAT_COMP_LVL_MINIMUM               (1)
+#define ZSTD_QAT_COMP_LVL_MAXIMUM               (12)
+#define ZSTD_QAT_NUM_BLOCK_OF_RETRY_INTERVAL    (1000)
+
+#define ZSTD_QAT_MAX_GRAB_RETRY                 (10)
+#define ZSTD_QAT_MAX_SEND_REQUEST_RETRY         (5)
+#define ZSTD_QAT_MAX_DEVICES                    (256)
+
+#define ZSTD_QAT_INTER_SZ(src_sz) (2 * (src_sz))
+#define ZSTD_QAT_COMPRESS_SRC_BUFF_SZ (ZSTD_BLOCKSIZE_MAX)
+#define ZSTD_QAT_DC_CEIL_DIV(x, y) (((x) + (y)-1) / (y))
+/* Formula for GEN4 LZ4S:
+* sourceLen + Ceil(sourceLen/2000) * 11 + 1024 */
+#define ZSTD_QAT_INTERMEDIATE_BUFFER_SZ (ZSTD_BLOCKSIZE_MAX + 1024 + ZSTD_QAT_DC_CEIL_DIV(ZSTD_BLOCKSIZE_MAX, 2000) * 11)
+
 #define ML_BITS 4
 #define ML_MASK ((1U << ML_BITS) - 1)
 #define RUN_BITS (8 - ML_BITS)
@@ -68,16 +99,93 @@ ZSTD_QAT_ProcessData_T gProcess = {
 
 #define ZSTD_QAT_TIMESPENT(a, b) ((a.tv_sec * 1000000 + a.tv_usec) - (b.tv_sec * 1000000 + b.tv_usec))
 
-/**
- *****************************************************************************
- *      Functions
- *****************************************************************************/
-size_t ZSTD_convertBlockSequencesToSeqStore(ZSTD_CCtx *cctx,
-                                            const ZSTD_Sequence *inSeqs,
-                                            size_t inSeqsSize, const void *src,
-                                            size_t srcSize);
+/** ZSTD_QAT_Status_e:
+ *  Error code indicates status
+ */
+typedef enum {
+    ZSTD_QAT_OK = 0,       /* Success */
+    ZSTD_QAT_STARTED = 1,  /* QAT device started */
+    ZSTD_QAT_FAIL = -1     /* Unspecified error */
+} ZSTD_QAT_Status_e;
 
+/** ZSTD_QAT_Session_T:
+ *  This structure contains all session parameters including a buffer used to store
+ *  lz4s output for current session and other parameters
+ */
+typedef struct ZSTD_QAT_Session_S {
+    int instHint; /*which instance we last used*/
+    unsigned char *qatIntermediateBuf;  /* Buffer to store lz4s output for decoding */
+    unsigned char reqPhyContMem; /* 1: QAT requires physically contiguous memory */
+    CpaDcSessionSetupData sessionSetupData; /* Session set up data for this session */
+    unsigned int failOffloadCnt; /* Failed offloading requests counter */
+} ZSTD_QAT_Session_T;
 
+/** ZSTD_QAT_Instance_T:
+ *  This structure cantains instance parameter, every session need to grab one
+ *  instance to sumbit request
+ */
+typedef struct ZSTD_QAT_Instance_S {
+    CpaInstanceInfo2 instanceInfo;
+    CpaDcInstanceCapabilities instanceCap;
+    CpaStatus jobStatus;
+    CpaDcSessionSetupData sessionSetupData;
+    CpaDcSessionHandle cpaSessHandle;
+    CpaDcRqResults res;
+    Cpa32U buffMetaSize;
+    CpaStatus instStartStatus;
+    unsigned char reqPhyContMem; /* 1: QAT requires physically contiguous memory */
+
+    /* Tracks memory where the intermediate buffers reside. */
+    CpaBufferList **intermediateBuffers;
+    Cpa16U intermediateCnt;
+    CpaBufferList *srcBuffer;
+    CpaBufferList *destBuffer;
+
+    unsigned int lock;
+    unsigned char memSetup;
+    unsigned char cpaSessSetup;
+    unsigned char dcInstSetup;
+    unsigned int numRetries;
+
+    unsigned int seqNumIn;
+    unsigned int seqNumOut;
+    int cbStatus;
+} ZSTD_QAT_Instance_T;
+
+/** ZSTD_QAT_ProcessData_T:
+ *  Process data for controling instance resource
+ */
+typedef struct ZSTD_QAT_ProcessData_S {
+    int qzstdInitStatus;
+    CpaInstanceHandle *dcInstHandle;
+    ZSTD_QAT_Instance_T *qzstdInst;
+    Cpa16U numInstances;
+    pthread_mutex_t mutex;
+    unsigned int cctxNum;
+} ZSTD_QAT_ProcessData_T;
+
+typedef struct ZSTD_QAT_InstanceList_S {
+    ZSTD_QAT_Instance_T instance;
+    CpaInstanceHandle dcInstHandle;
+    struct ZSTD_QAT_InstanceList_S *next;
+} ZSTD_QAT_InstanceList_T;
+
+typedef struct ZSTD_QAT_Hardware_S {
+    ZSTD_QAT_InstanceList_T devices[ZSTD_QAT_MAX_DEVICES];
+    unsigned int devNum;
+    unsigned int maxDevId;
+} ZSTD_QAT_Hardware_T;
+
+ZSTD_QAT_ProcessData_T gProcess = {
+    .qzstdInitStatus = ZSTD_QAT_FAIL,
+    .mutex = PTHREAD_MUTEX_INITIALIZER,
+    .cctxNum = 0,
+};
+
+/** ZSTD_QAT_calloc:
+ *    This function is used to allocate contiguous or discontiguous memory(initialized to zero)
+ *  according to parameter and return pointer to allocated memory
+ */
 static void *ZSTD_QAT_calloc(size_t nb, size_t size, unsigned char reqPhyContMem)
 {
     if(!reqPhyContMem) {
@@ -91,6 +199,10 @@ static void *ZSTD_QAT_calloc(size_t nb, size_t size, unsigned char reqPhyContMem
     }
 }
 
+/** ZSTD_QAT_free:
+ *    This function needs to be called in pairs with ZSTD_QAT_calloc
+ *  to free memory by ZSTD_QAT_calloc.
+ */
 static void ZSTD_QAT_free(void *ptr, unsigned char reqPhyContMem)
 {
     if(!reqPhyContMem) {
@@ -104,6 +216,9 @@ static void ZSTD_QAT_free(void *ptr, unsigned char reqPhyContMem)
     }
 }
 
+/** ZSTD_QAT_virtToPhys:
+ *    Convert virtual address to physical
+ */
 static __inline CpaPhysicalAddr ZSTD_QAT_virtToPhys(void *virtAddr)
 {
 #ifdef ENABLE_USDM_DRV
@@ -167,6 +282,9 @@ static void ZSTD_QAT_clearDevices(ZSTD_QAT_Hardware_T *qatHw)
     }
 }
 
+/** ZSTD_QAT_stopQat:
+ *    Stop DC instance and QAT device
+ */
 static void ZSTD_QAT_stopQat(void)
 {
     int i;
@@ -208,8 +326,9 @@ static void ZSTD_QAT_removeSession(int i)
     /* Remove session */
     if ((NULL != gProcess.dcInstHandle[i]) &&
         (NULL != gProcess.qzstdInst[i].cpaSessHandle)) {
-        // polling here if there still are some reponse haven't beed polled
-        // if didn't poll there response, cpaDcRemoveSession will raise error message
+        /* polling here if there still are some reponse haven't beed polled
+        *  if didn't poll there response, cpaDcRemoveSession will raise error message
+        */
         do {
             rc = icp_sal_DcPollInstance(gProcess.dcInstHandle[i], 0);
         } while(CPA_STATUS_SUCCESS == rc);
@@ -221,6 +340,9 @@ static void ZSTD_QAT_removeSession(int i)
     }
 }
 
+/** ZSTD_QAT_cleanUpInstMem:
+ *    Release the memory bound to corresponding instance
+ */
 static void ZSTD_QAT_cleanUpInstMem(int i)
 {
     int j;
@@ -438,7 +560,7 @@ static int ZSTD_QAT_getAndShuffleInstance(void)
         }
         instanceFound++;
 
-        // check lz4s support
+        /* check lz4s support */
         if (!newInst->instance.instanceCap.checksumXXHash32 ||
             !newInst->instance.instanceCap.statelessLZ4SCompression) {
             free(newInst);
@@ -507,7 +629,9 @@ static void ZSTD_QAT_dcCallback(void *cbDataTag, CpaStatus stat)
     }
 }
 
-/* TODO: Need to add huge page support if SVM is not well supported in driver */
+/** ZSTD_QAT_allocInstMem:
+ *    Allocate memory for corresponding instance
+ */
 static int ZSTD_QAT_allocInstMem(int i)
 {
     int j;
@@ -836,7 +960,7 @@ static size_t ZSTD_QAT_decLz4s(ZSTD_Sequence *outSeqs, size_t outSeqsCapacity,
         }
          literalLen = (unsigned short)length;
         ip += length;
-        if (ip == endip) { // Meet the end of the LZ4 sequence
+        if (ip == endip) { /* Meet the end of the LZ4 sequence */
             literalLen += histLiteralLen;
             outSeqs[seqsIdx].litLength = literalLen;
             outSeqs[seqsIdx].offset = offset;
@@ -909,13 +1033,13 @@ size_t qatMatchfinder(
     struct timeval timeNow;
     ZSTD_QAT_Session_T *zstdSess = (ZSTD_QAT_Session_T *)externalMatchState;
 
-    // QAT only support L1-L12
+    /* QAT only support L1-L12 */
     if (compressionLevel < ZSTD_QAT_COMP_LVL_MINIMUM ||
         compressionLevel > ZSTD_QAT_COMP_LVL_MAXIMUM) {
         return ZSTD_EXTERNAL_MATCHFINDER_ERROR;
     }
 
-    // check hardware initialization status
+    /* check hardware initialization status */
     if (gProcess.qzstdInitStatus != ZSTD_QAT_OK) {
         zstdSess->failOffloadCnt++;
         if (zstdSess->failOffloadCnt >= ZSTD_QAT_NUM_BLOCK_OF_RETRY_INTERVAL) {
@@ -937,7 +1061,7 @@ size_t qatMatchfinder(
     zstdSess->instHint = i;
     zstdSess->reqPhyContMem = gProcess.qzstdInst[i].reqPhyContMem;
 
-    // allocate buffer
+    /* allocate instance's buffer */
     if (0 == gProcess.qzstdInst[i].memSetup) {
         if (ZSTD_QAT_OK != ZSTD_QAT_allocInstMem(i)) {
             rc = ZSTD_EXTERNAL_MATCHFINDER_ERROR;
@@ -945,7 +1069,7 @@ size_t qatMatchfinder(
         }
     }
 
-    // start Dc Instance
+    /* start Dc Instance */
     if (0 == gProcess.qzstdInst[i].dcInstSetup) {
         if (ZSTD_QAT_OK != ZSTD_QAT_startDcInstance(i)) {
             rc = ZSTD_EXTERNAL_MATCHFINDER_ERROR;
@@ -953,7 +1077,7 @@ size_t qatMatchfinder(
         }
     }
 
-    // init cpaSessHandle
+    /* init cpaSessHandle */
     if (0 == gProcess.qzstdInst[i].cpaSessSetup) {
         if (ZSTD_QAT_OK != ZSTD_QAT_cpaInitSess(zstdSess, i)) {
             rc = ZSTD_EXTERNAL_MATCHFINDER_ERROR;
@@ -961,7 +1085,7 @@ size_t qatMatchfinder(
         }
     }
 
-    // update cpaSessHandle
+    /* update cpaSessHandle */
     if (0 != memcmp(&zstdSess->sessionSetupData,
         &gProcess.qzstdInst[i].sessionSetupData,
         sizeof(CpaDcSessionSetupData))) {
@@ -1000,7 +1124,7 @@ size_t qatMatchfinder(
     gProcess.qzstdInst[i].res.checksum = 0;
 
     do {
-        qrc = cpaDcCompressData2(gProcess.dcInstHandle[i], // todo: use local var
+        qrc = cpaDcCompressData2(gProcess.dcInstHandle[i],
                                 gProcess.qzstdInst[i].cpaSessHandle,
                                 gProcess.qzstdInst[i].srcBuffer,
                                 gProcess.qzstdInst[i].destBuffer, &opData,
@@ -1040,9 +1164,6 @@ size_t qatMatchfinder(
         goto error;
     }
 
-    // TODO: need to check why lz4s bound formula is not right in some case
-    // Workaround solution: if compressed size is smaller than source size,
-    // fall back to software
     if (gProcess.qzstdInst[i].res.consumed < srcSize ||
         gProcess.qzstdInst[i].res.produced == 0 ||
         gProcess.qzstdInst[i].res.produced > ZSTD_QAT_INTERMEDIATE_BUFFER_SZ ||
@@ -1055,14 +1176,14 @@ size_t qatMatchfinder(
     assert(rc < (outSeqsCapacity - 1));
 
 error:
-    // reset pData
+    /* reset pData */
     if (!zstdSess->reqPhyContMem) {
         gProcess.qzstdInst[i].srcBuffer->pBuffers->pData = NULL;
     }
     gProcess.qzstdInst[i].destBuffer->pBuffers->pData = NULL;
 
 exit:
-    // release QAT instance
+    /* release QAT instance */
     ZSTD_QAT_releaseInstance(i);
     return rc;
 }

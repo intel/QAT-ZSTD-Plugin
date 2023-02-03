@@ -32,11 +32,15 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  ***************************************************************************/
- 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #define ZSTD_STATIC_LINKING_ONLY
 #include "zstd.h"
@@ -52,7 +56,7 @@ int main(int argc, char *argv[]) {
     unsigned char *srcBuffer = NULL;
     unsigned char *dstBuffer = NULL;
     unsigned char *decompBuffer = NULL;
-    long bytesRead = 0;
+    unsigned long bytesRead = 0;
     size_t cSize = 0;
     size_t res = 0;
     ZSTD_CCtx* const zc = ZSTD_createCCtx();
@@ -75,7 +79,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // get input file size
+    /* get input file size */
     inputFileSize = lseek(inputFile, 0, SEEK_END);
     lseek(inputFile, 0, SEEK_SET);
     dstBufferSize = ZSTD_compressBound(inputFileSize);
@@ -90,7 +94,7 @@ int main(int argc, char *argv[]) {
     decompBuffer = malloc(bytesRead);
     assert(decompBuffer);
 
-    // register qatMatchfinder
+    /* register qatMatchfinder */
     ZSTD_registerExternalMatchFinder(
         zc,
         matchState,
@@ -103,21 +107,21 @@ int main(int argc, char *argv[]) {
         goto exit;
     }
 
-    // compress
+    /* compress */
     cSize = ZSTD_compress2(zc, dstBuffer, dstBufferSize, srcBuffer, bytesRead);
     if ((int)cSize <= 0) {
         printf("Compress failed\n");
         goto exit;
     }
 
-    // decompress
+    /* decompress */
     res = ZSTD_decompress(decompBuffer, inputFileSize, dstBuffer, cSize);
     if (res != bytesRead) {
         printf("Decompressed size in not equal to sourece size\n");
         goto exit;
     }
 
-    // compare original buffer with decompress output
+    /* compare original buffer with decompressed output */
     if (memcmp(decompBuffer, srcBuffer, bytesRead) == 0) {
         printf("Compression and decompression were successful!\n");
         printf("Source size: %lu\n", bytesRead);
