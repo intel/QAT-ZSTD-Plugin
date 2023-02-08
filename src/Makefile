@@ -33,21 +33,48 @@
 #
 # #######################################################################
 
-CFLAGS  += -std=gnu99 -g -O3
-DEBUGFLAGS= -Wall -Wextra -Wcast-qual -Wcast-align -Wshadow \
-            -Wstrict-aliasing=1 -Wswitch-enum \
-            -Wstrict-prototypes -Wundef -Wpointer-arith \
-            -Wvla -Wformat=2 -Winit-self -Wfloat-equal -Wwrite-strings \
-            -Wredundant-decls
-CFLAGS  += $(DEBUGFLAGS)
-LDFLAGS += -lqatmf -lzstd -L/usr/local/lib -lqat_s -lusdm_drv_s
+LIBDIR  = $(ZSTD_ROOT)/lib
+LIBZSTD = $(LIBDIR)/libzstd.a
 
-default: test
+.PHONY: default
+default: libqatmf.a
 
-all: test
+DESTLIBDIR     ?= /usr/local/lib
+DESTINCLUDEDIR ?= /usr/local/include
 
-test: test.c
-	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
+CP ?= cp
+
+QATFLAGS = -I$(ICP_ROOT)/quickassist/include	\
+		   -I$(ICP_ROOT)/quickassist/include/dc	\
+		   -I$(ICP_ROOT)/quickassist/lookaside/access_layer/include
+LDFLAGS  = -L$(ICP_ROOT)/build -lqat_s
+
+ENABLE_USDM_DRV ?= 0
+ifneq ($(ENABLE_USDM_DRV), 0)
+  QATFLAGS += -I$(ICP_ROOT)/quickassist/utilities/libusdm_drv -DENABLE_USDM_DRV
+  LDFLAGS  += -lusdm_drv_s
+endif
+
+CFLAGS += -fPIC
+
+qatmatchfinder.o: qatmatchfinder.c
+	$(CC) -c $(CFLAGS) $(QATFLAGS) $(LDFLAGS)  $^ -o $@
+
+libqatmf.a: qatmatchfinder.o
+	$(AR) rc $@ $^
+
+.PHONY: install
+install: libqatmf.a
+	$(CP) libqatmf.a $(DESTLIBDIR)
+	$(CP) qatmatchfinder.h $(DESTINCLUDEDIR)
+	@echo qatmatchfinder library successfully installed
+
+.PHONY: uninstall
+uninstall:
+	$(RM) $(DESTLIBDIR)/libqatmf.a
+	$(RM) $(DESTINCLUDEDIR)/qatmatchfinder.h
+	@echo qatmatchfinder library successfully uninstalled
 
 clean:
-	$(RM) test
+	$(RM) *.o
+	$(RM) libqatmf.a

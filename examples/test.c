@@ -45,7 +45,7 @@
 #define ZSTD_STATIC_LINKING_ONLY
 #include "zstd.h"
 #include "zstd_errors.h"
-#include "../src/qatmatchfinder.h"
+#include "qatmatchfinder.h"
 
 int main(int argc, char *argv[]) {
     char *inputFileName = NULL;
