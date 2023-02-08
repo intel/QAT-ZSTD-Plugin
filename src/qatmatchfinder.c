@@ -182,6 +182,8 @@ ZSTD_QAT_ProcessData_T gProcess = {
     .cctxNum = 0,
 };
 
+extern CpaStatus icp_adf_get_numDevices(Cpa32U *);
+
 /** ZSTD_QAT_calloc:
  *    This function is used to allocate contiguous or discontiguous memory(initialized to zero)
  *  according to parameter and return pointer to allocated memory
