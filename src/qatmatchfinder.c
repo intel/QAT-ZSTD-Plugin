@@ -1027,7 +1027,7 @@ size_t qatMatchfinder(
     size_t windowSize)
 {
     int i;
-    size_t rc = ZSTD_EXTERNAL_MATCHFINDER_ERROR;
+    size_t rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
     int qrc = CPA_STATUS_FAIL;
     CpaDcOpData opData = {};
     int retry_cnt = ZSTD_QAT_MAX_SEND_REQUEST_RETRY;
@@ -1038,7 +1038,7 @@ size_t qatMatchfinder(
     /* QAT only support L1-L12 */
     if (compressionLevel < ZSTD_QAT_COMP_LVL_MINIMUM ||
         compressionLevel > ZSTD_QAT_COMP_LVL_MAXIMUM) {
-        return ZSTD_EXTERNAL_MATCHFINDER_ERROR;
+        return ZSTD_SEQUENCE_PRODUCER_ERROR;
     }
 
     /* check hardware initialization status */
@@ -1047,9 +1047,9 @@ size_t qatMatchfinder(
         if (zstdSess->failOffloadCnt >= ZSTD_QAT_NUM_BLOCK_OF_RETRY_INTERVAL) {
             zstdSess->failOffloadCnt = 0;
             if (ZSTD_QAT_startQatDevice(NULL) != ZSTD_QAT_OK)
-                return ZSTD_EXTERNAL_MATCHFINDER_ERROR;
+                return ZSTD_SEQUENCE_PRODUCER_ERROR;
         } else {
-            return ZSTD_EXTERNAL_MATCHFINDER_ERROR;
+            return ZSTD_SEQUENCE_PRODUCER_ERROR;
         }
     }
 
@@ -1057,7 +1057,7 @@ size_t qatMatchfinder(
 
     i = ZSTD_QAT_grabInstance(zstdSess->instHint);
     if (-1 == i) {
-        return ZSTD_EXTERNAL_MATCHFINDER_ERROR;
+        return ZSTD_SEQUENCE_PRODUCER_ERROR;
     }
 
     zstdSess->instHint = i;
@@ -1066,7 +1066,7 @@ size_t qatMatchfinder(
     /* allocate instance's buffer */
     if (0 == gProcess.qzstdInst[i].memSetup) {
         if (ZSTD_QAT_OK != ZSTD_QAT_allocInstMem(i)) {
-            rc = ZSTD_EXTERNAL_MATCHFINDER_ERROR;
+            rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
             goto exit;
         }
     }
@@ -1074,7 +1074,7 @@ size_t qatMatchfinder(
     /* start Dc Instance */
     if (0 == gProcess.qzstdInst[i].dcInstSetup) {
         if (ZSTD_QAT_OK != ZSTD_QAT_startDcInstance(i)) {
-            rc = ZSTD_EXTERNAL_MATCHFINDER_ERROR;
+            rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
             goto exit;
         }
     }
@@ -1082,7 +1082,7 @@ size_t qatMatchfinder(
     /* init cpaSessHandle */
     if (0 == gProcess.qzstdInst[i].cpaSessSetup) {
         if (ZSTD_QAT_OK != ZSTD_QAT_cpaInitSess(zstdSess, i)) {
-            rc = ZSTD_EXTERNAL_MATCHFINDER_ERROR;
+            rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
             goto exit;
         }
     }
@@ -1092,7 +1092,7 @@ size_t qatMatchfinder(
         &gProcess.qzstdInst[i].sessionSetupData,
         sizeof(CpaDcSessionSetupData))) {
         if (ZSTD_QAT_OK != ZSTD_QAT_cpaUpdateSess(zstdSess, i)) {
-            rc = ZSTD_EXTERNAL_MATCHFINDER_ERROR;
+            rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
             goto exit;
         }
     }
@@ -1102,7 +1102,7 @@ size_t qatMatchfinder(
         (unsigned char *)ZSTD_QAT_calloc(1, ZSTD_QAT_INTERMEDIATE_BUFFER_SZ,
             zstdSess->reqPhyContMem);
         if (NULL == zstdSess->qatIntermediateBuf) {
-            rc = ZSTD_EXTERNAL_MATCHFINDER_ERROR;
+            rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
             goto exit;
         }
     }
@@ -1135,7 +1135,7 @@ size_t qatMatchfinder(
     } while (CPA_STATUS_RETRY == qrc && retry_cnt > 0);
 
     if (CPA_STATUS_SUCCESS != qrc) {
-        rc = ZSTD_EXTERNAL_MATCHFINDER_ERROR;
+        rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
         goto error;
     }
 
@@ -1153,16 +1153,16 @@ size_t qatMatchfinder(
 
     if (CPA_STATUS_FAIL == qrc) {
         gProcess.qzstdInst[i].seqNumOut++;
-        rc = ZSTD_EXTERNAL_MATCHFINDER_ERROR;
+        rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
         goto error;
     }
 
     if (CPA_STATUS_RETRY == qrc) {
-        rc = ZSTD_EXTERNAL_MATCHFINDER_ERROR;
+        rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
         goto error;
     }
     if (gProcess.qzstdInst[i].cbStatus == ZSTD_QAT_FAIL) {
-        rc = ZSTD_EXTERNAL_MATCHFINDER_ERROR;
+        rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
         goto error;
     }
 
@@ -1170,7 +1170,7 @@ size_t qatMatchfinder(
         gProcess.qzstdInst[i].res.produced == 0 ||
         gProcess.qzstdInst[i].res.produced > ZSTD_QAT_INTERMEDIATE_BUFFER_SZ ||
         CPA_STATUS_SUCCESS != gProcess.qzstdInst[i].res.status) {
-        rc = ZSTD_EXTERNAL_MATCHFINDER_ERROR;
+        rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
         goto error;
     }
 

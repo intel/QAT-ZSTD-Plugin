@@ -94,14 +94,14 @@ int main(int argc, char *argv[]) {
     decompBuffer = malloc(bytesRead);
     assert(decompBuffer);
 
-    /* register qatMatchfinder */
-    ZSTD_registerExternalMatchFinder(
+    /* register qatmatchfinder */
+    ZSTD_registerSequenceProducer(
         zc,
         matchState,
         qatMatchfinder
     );
 
-    res = ZSTD_CCtx_setParameter(zc, ZSTD_c_enableMatchFinderFallback, 1);
+    res = ZSTD_CCtx_setParameter(zc, ZSTD_c_enableSeqProducerFallback, 1);
     if ((int)res <= 0) {
         printf("Failed to set fallback\n");
         goto exit;
