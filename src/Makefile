@@ -48,14 +48,19 @@ LDFLAGS  = -L$(ICP_ROOT)/build -lqat_s
 
 ENABLE_USDM_DRV ?= 0
 ifneq ($(ENABLE_USDM_DRV), 0)
-  QATFLAGS += -I$(ICP_ROOT)/quickassist/utilities/libusdm_drv -DENABLE_USDM_DRV
-  LDFLAGS  += -lusdm_drv_s
+  	QATFLAGS += -I$(ICP_ROOT)/quickassist/utilities/libusdm_drv -DENABLE_USDM_DRV
+  	LDFLAGS  += -lusdm_drv_s
+endif
+
+ENABLE_DEBUG ?=0
+ifneq ($(ENABLE_DEBUG), 0)
+	DEBUGFLAGS += -DENABLE_DEBUG -g -O0
 endif
 
 CFLAGS += -fPIC
 
 qatmatchfinder.o: qatmatchfinder.c
-	$(CC) -c $(CFLAGS) $(QATFLAGS) $(LDFLAGS)  $^ -o $@
+	$(CC) -c $(CFLAGS) $(QATFLAGS) $(DEBUGFLAGS) $(LDFLAGS)  $^ -o $@
 
 lib: qatmatchfinder.o
 	$(AR) rc libqatmf.a $^
