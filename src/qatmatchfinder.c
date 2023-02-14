@@ -58,6 +58,7 @@
 #include <unistd.h>
 #include <limits.h> /* INT_MAX */
 #include <string.h> /* memset */
+#include <stdarg.h>
 
 #include "cpa.h"
 #include "cpa_dc.h"
@@ -184,6 +185,26 @@ ZSTD_QAT_ProcessData_T gProcess = {
 
 extern CpaStatus icp_adf_get_numDevices(Cpa32U *);
 
+#ifdef ENABLE_DEBUG
+static inline void DEBUG(const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    vfprintf(stdout, format, args);
+    va_end(args);
+}
+#else
+#define DEBUG(...)
+#endif
+
+static inline void ERROR(const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+}
+
 /** ZSTD_QAT_calloc:
  *    This function is used to allocate contiguous or discontiguous memory(initialized to zero)
  *  according to parameter and return pointer to allocated memory
@@ -213,7 +234,7 @@ static void ZSTD_QAT_free(void *ptr, unsigned char reqPhyContMem)
 #ifdef ENABLE_USDM_DRV
         qaeMemFreeNUMA(&ptr);
 #else
-        printf("Don't support QAT USDM driver\n");
+        ERROR("Don't support QAT USDM driver\n");
 #endif
     }
 }
@@ -292,14 +313,14 @@ static void ZSTD_QAT_stopQat(void)
     int i;
     CpaStatus status = CPA_STATUS_SUCCESS;
 
-    printf("Call stopQat.\n");
+    DEBUG("Call stopQat.\n");
     if (NULL != gProcess.dcInstHandle &&
         NULL != gProcess.qzstdInst) {
         for (i = 0; i < gProcess.numInstances; i++) {
             if (0 != gProcess.qzstdInst[i].dcInstSetup) {
                 status = cpaDcStopInstance(gProcess.dcInstHandle[i]);
                 if (CPA_STATUS_SUCCESS != status) {
-                    printf("Stop instance failed, status=%d\n", status);
+                    ERROR("Stop instance failed, status=%d\n", status);
                 }
             }
         }
@@ -477,7 +498,7 @@ static int ZSTD_QAT_salUserStart(void)
     }
 
     if (CPA_STATUS_SUCCESS != icp_sal_userStart("SHIM")) {
-        printf("icp_sal_userStart failed\n");
+        ERROR("icp_sal_userStart failed\n");
         return ZSTD_QAT_FAIL;
     }
 
@@ -493,7 +514,7 @@ static int ZSTD_QAT_getAndShuffleInstance(void)
     unsigned int instanceMatched = 0;
     ZSTD_QAT_InstanceList_T *newInst;
     if (CPA_STATUS_SUCCESS != cpaDcGetNumInstances(&gProcess.numInstances)) {
-        printf("cpaDcGetNumInstances failed\n");
+        ERROR("cpaDcGetNumInstances failed\n");
         goto exit;
     }
 
@@ -502,38 +523,38 @@ static int ZSTD_QAT_getAndShuffleInstance(void)
     gProcess.qzstdInst = (ZSTD_QAT_Instance_T *)calloc(gProcess.numInstances,
                                                      sizeof(ZSTD_QAT_Instance_T));
     if (NULL == gProcess.dcInstHandle || NULL == gProcess.qzstdInst) {
-        printf("calloc for qzstdInst failed\n");
+        ERROR("calloc for qzstdInst failed\n");
         goto exit;
     }
 
     if (CPA_STATUS_SUCCESS != cpaDcGetInstances(
             gProcess.numInstances, gProcess.dcInstHandle)) {
-        printf("cpaDcGetInstances failed\n");
+        ERROR("cpaDcGetInstances failed\n");
         goto exit;
     }
 
     qatHw = (ZSTD_QAT_Hardware_T *)calloc(1, sizeof(ZSTD_QAT_Hardware_T));
     if (NULL == qatHw) {
-        printf("calloc for qatHw failed\n");
+        ERROR("calloc for qatHw failed\n");
         goto exit;
     }
     for (i = 0; i < gProcess.numInstances; i++) {
         newInst = (ZSTD_QAT_InstanceList_T *)calloc(1, sizeof(ZSTD_QAT_InstanceList_T));
         if (NULL == newInst) {
-            printf("calloc failed\n");
+            ERROR("calloc failed\n");
             goto exit;
         }
 
         if (CPA_STATUS_SUCCESS != cpaDcInstanceGetInfo2(
             gProcess.dcInstHandle[i], &newInst->instance.instanceInfo)) {
-            printf("cpaDcInstanceGetInfo2 failed\n");
+            ERROR("cpaDcInstanceGetInfo2 failed\n");
             free(newInst);
             goto exit;
         }
 
         if (CPA_STATUS_SUCCESS != cpaDcQueryCapabilities(
             gProcess.dcInstHandle[i], &newInst->instance.instanceCap)) {
-            printf("cpaDcQueryCapabilities failed\n");
+            ERROR("cpaDcQueryCapabilities failed\n");
             free(newInst);
             goto exit;
         }
@@ -547,7 +568,7 @@ static int ZSTD_QAT_getAndShuffleInstance(void)
 
         devId = newInst->instance.instanceInfo.physInstId.packageId;
         if (ZSTD_QAT_OK != ZSTD_QAT_setInstance(devId, newInst, qatHw)) {
-            printf("ZSTD_QAT_setInstance on device %d failed\n", devId);
+            ERROR("ZSTD_QAT_setInstance on device %d failed\n", devId);
             free(newInst);
             goto exit;
         }
@@ -1038,6 +1059,7 @@ size_t qatMatchfinder(
     /* QAT only support L1-L12 */
     if (compressionLevel < ZSTD_QAT_COMP_LVL_MINIMUM ||
         compressionLevel > ZSTD_QAT_COMP_LVL_MAXIMUM) {
+        DEBUG("Only can offload L1-L12 to QAT, current compression level: %d\n", compressionLevel);
         return ZSTD_SEQUENCE_PRODUCER_ERROR;
     }
 
