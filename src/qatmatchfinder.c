@@ -69,6 +69,8 @@
 #include "qae_mem.h"
 #endif
 
+#define KB                                      (1024)
+
 #define ZSTD_QAT_COMP_LVL_DEFAULT               (1)
 #define ZSTD_QAT_COMP_LVL_MINIMUM               (1)
 #define ZSTD_QAT_COMP_LVL_MAXIMUM               (12)
@@ -1055,6 +1057,11 @@ size_t qatMatchfinder(
     struct timeval timeStart;
     struct timeval timeNow;
     ZSTD_QAT_Session_T *zstdSess = (ZSTD_QAT_Session_T *)externalMatchState;
+
+    if (windowSize < (srcSize < 32 * KB ? srcSize : 32 * KB) || dictSize > 0) {
+        DEBUG("Currently not use windowsSize and not support dictionary\n");
+        return ZSTD_SEQUENCE_PRODUCER_ERROR;
+    }
 
     /* QAT only support L1-L12 */
     if (compressionLevel < ZSTD_QAT_COMP_LVL_MINIMUM ||
