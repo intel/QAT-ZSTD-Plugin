@@ -2,7 +2,7 @@
  *
  *   BSD LICENSE
  *
- *   Copyright(c) 2022 Intel Corporation. All rights reserved.
+ *   Copyright(c) 2023 Intel Corporation. All rights reserved.
  *   All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
@@ -44,14 +44,16 @@
 #include <pthread.h>
 #include <unistd.h>
 
-
 #define ZSTD_STATIC_LINKING_ONLY
 #include "zstd.h"
 #include "zstd_errors.h"
 #include "../src/qatmatchfinder.h"
 
 #define NANOSEC (1000000000ULL) /* 1 second */
+#define NANOUSEC (1000) /* 1 usec */
 #define MB (1000000)   /* 1MB */
+#define BUCKET_NUM  200
+#define DEFAULT_CHUNK_SIZE (32 * 1024)
 
 #ifndef MIN
     #define MIN(a,b) ((a)<(b)?(a):(b))
@@ -63,15 +65,101 @@
 #define GETDIFFTIME(start_ticks, end_ticks) (1000000000ULL*( end_ticks.tv_sec - start_ticks.tv_sec ) + ( end_ticks.tv_nsec - start_ticks.tv_nsec ))
 
 typedef struct {
-    size_t blockSize; /* the max chunk size of ZSTD_compress2 */
+    size_t chunkSize; /* the max chunk size of ZSTD_compress2 */
     size_t srcSize;  /* Input file size */
     unsigned cLevel; /* Compression Level 1 - 12 */
     unsigned nbIterations; /* Number test loops, default is 1 */
     char benchMode; /* 0: software compression, 1: QAT compression*/
+    char searchForExternalRepcodes; /* 0: disable, 1: enable */
     const unsigned char* srcBuffer; /* Input data point */
 } threadArgs_t;
 
-static pthread_barrier_t g_threadBarrier;
+typedef struct {
+    size_t bucketValue[BUCKET_NUM];
+    size_t bucket[BUCKET_NUM];
+    size_t maxBucketValue;
+    size_t minBucketValue;
+    int bucketCount;
+    size_t num;
+    size_t sum;
+    size_t min;
+    size_t max;
+} HistogramStat_t;
+
+static HistogramStat_t compHistogram;
+static pthread_barrier_t g_threadBarrier1, g_threadBarrier2;
+static size_t g_threadNum = 0;
+
+static void initHistorgram(HistogramStat_t *historgram)
+{
+    historgram->bucketValue[0] = 1000;
+    historgram->minBucketValue = historgram->bucketValue[0];
+    historgram->bucketCount = 1;
+    for (int i = 1; i < BUCKET_NUM; i++) {
+        if (historgram->bucketValue[i] > 0XFFFFFFFF) {
+            break;
+        }
+        historgram->bucketValue[i] = historgram->bucketValue[i - 1] * 1.05;
+        historgram->maxBucketValue = historgram->bucketValue[i];
+        historgram->bucketCount++;
+    }
+    memset(historgram->bucket, 0, sizeof(size_t) * BUCKET_NUM);
+    historgram->num = 0;
+    historgram->sum = 0;
+    historgram->min = 0xFFFFFFFF;
+    historgram->max = 0;
+}
+
+static int getBucketIndex(HistogramStat_t *historgram, size_t value)
+{
+    for (int bucketIndex = 0; bucketIndex < BUCKET_NUM; bucketIndex++){
+        if (value < historgram->bucketValue[bucketIndex]) {
+            return bucketIndex;
+        }
+    }
+    return BUCKET_NUM -1;
+}
+
+static void bucketAdd(HistogramStat_t *historgram, size_t value)
+{
+    int bucketIndex = getBucketIndex(historgram, value);
+    __sync_fetch_and_add(&historgram->bucket[bucketIndex], 1);
+
+    __sync_fetch_and_add(&historgram->sum, value);
+    __sync_fetch_and_add(&historgram->num, 1);
+    if (value < historgram->min)
+        __sync_lock_test_and_set(&historgram->min, value);
+    if (value > historgram->max)
+        __sync_lock_test_and_set(&historgram->max, value);
+}
+
+static double percentile(HistogramStat_t *historgram, double p)
+{
+    double threshold = historgram->num * (p / 100.0);
+    size_t cumulative_sum = 0;
+    for (int index = 0; index < historgram->bucketCount; index++) {
+        size_t bucket_count = historgram->bucket[index];
+        cumulative_sum += bucket_count;
+        if (cumulative_sum >= threshold) {
+            size_t left_point = (index == 0) ? 0 : historgram->bucketValue[index - 1];
+            size_t right_point =  historgram->bucketValue[index];
+            size_t left_sum = cumulative_sum - bucket_count;
+            size_t right_sum = cumulative_sum;
+            double pos = 0;
+            size_t right_left_diff = right_sum - left_sum;
+            if (right_left_diff != 0) {
+                pos = (threshold - left_sum) / right_left_diff;
+            }
+            double r = left_point + (right_point - left_point) * pos;
+            if (r < historgram->min)
+                r = historgram->min;
+            if (r > historgram->max)
+                r = historgram->max;
+            return r;
+        }
+    }
+    return historgram->max;
+}
 
 static int usage(const char* exe)
 {
@@ -80,7 +168,8 @@ static int usage(const char* exe)
     DISPLAY("Options:\n");
     DISPLAY("    -t#       Set maximum threads [1 - 128] (default: 1)\n");
     DISPLAY("    -l#       Set iteration loops [1 - 1000000](default: 1)\n");
-    DISPLAY("    -b#       Set block size (default: 4K)\n");
+    DISPLAY("    -c#       Set chunk size (default: 32K)\n");
+    DISPLAY("    -E        Enable/disbale searchForExternalRepcodes(default: Disabled)\n");
     DISPLAY("    -L#       Set compression level [1 - 12] (default: 1)\n");
     DISPLAY("    -m#       Benchmark mode, 0: software compression; 1:QAT compression(default: 1) \n");
     DISPLAY("    -h/H      Print this help message\n");
@@ -126,31 +215,33 @@ static unsigned stringToU32(const char** s)
 void* benchmark(void *args)
 {
     threadArgs_t* threadArgs = (threadArgs_t*)args;
-    size_t rc = 0;
+    size_t rc = 0, threadNum;
     unsigned loops;
     int verifyResult = 0; /* 1: pass, 0: fail */
-    size_t* chunkSizes = NULL;
-    size_t* compSizes = NULL;
+    size_t* chunkSizes = NULL; /* The array of chunk size */
+    size_t* compSizes = NULL; /* The array of compressed size */
     size_t nanosec = 0;
-    double speed = 0, ratio = 0;
-    size_t csCount, nbChunk, destSize, cSize;
+    size_t compNanosecSum = 0, decompNanosecSum = 0;
+    double compSpeed = 0, decompSpeed = 0, ratio = 0;
+    size_t csCount, nbChunk, destSize, cSize, dcSzie;
     struct timespec startTicks, endTicks;
     unsigned char* destBuffer = NULL, *decompBuffer = NULL;
     const unsigned char* srcBuffer = threadArgs->srcBuffer;
     size_t srcSize = threadArgs->srcSize;
-    size_t blockSize = threadArgs->blockSize;
+    size_t chunkSize = threadArgs->chunkSize;
     unsigned nbIterations = threadArgs->nbIterations;
     unsigned cLevel = threadArgs->cLevel;
     ZSTD_CCtx* const zc = ZSTD_createCCtx();
+    ZSTD_DCtx* const zdc = ZSTD_createDCtx();
     void *matchState = NULL;
 
-    csCount = srcSize / blockSize + (srcSize % blockSize ? 1 : 0);
+    csCount = srcSize / chunkSize + (srcSize % chunkSize ? 1 : 0);
     chunkSizes = (size_t *)malloc(csCount * sizeof(size_t));
     compSizes = (size_t *)malloc(csCount * sizeof(size_t));
     assert(chunkSizes && compSizes);
     size_t tmpSize = srcSize;
     for (nbChunk = 0; nbChunk < csCount; nbChunk++) {
-        chunkSizes[nbChunk] = MIN(tmpSize, blockSize);
+        chunkSizes[nbChunk] = MIN(tmpSize, chunkSize);
         tmpSize -= chunkSizes[nbChunk];
     }
 
@@ -163,22 +254,33 @@ void* benchmark(void *args)
         matchState = ZSTD_QAT_createMatchState();
         ZSTD_registerSequenceProducer(zc, matchState, qatMatchfinder);
     }
+
+    if (threadArgs->searchForExternalRepcodes) {
+	rc = ZSTD_CCtx_setParameter(zc, ZSTD_c_searchForExternalRepcodes, ZSTD_ps_enable);
+    } else {
+	rc = ZSTD_CCtx_setParameter(zc, ZSTD_c_searchForExternalRepcodes, ZSTD_ps_disable);
+    }
+    if ((int)rc <= 0) {
+        DISPLAY("Fail to set parameter ZSTD_c_searchForExternalRepcodes\n");
+        goto exit;
+    }
+
     rc = ZSTD_CCtx_setParameter(zc, ZSTD_c_compressionLevel, cLevel);
     if ((int)rc <= 0) {
-        DISPLAY("Failed to set fallback\n");
+        DISPLAY("Fail to set parameter ZSTD_c_compressionLevel\n");
         goto exit;
     }
 
     /* Waiting all threads */
-    pthread_barrier_wait(&g_threadBarrier);
+    pthread_barrier_wait(&g_threadBarrier1);
 
-    /* Start benchmark */
-    GETTIME(startTicks);
+    /* Start compression benchmark */
     for (loops = 0; loops < nbIterations; loops++) {
         unsigned char* tmpDestBuffer = destBuffer;
         const unsigned char* tmpSrcBuffer = srcBuffer;
         size_t tmpDestSize = destSize;
         for (nbChunk = 0; nbChunk < csCount; nbChunk++) {
+            GETTIME(startTicks);
             cSize = ZSTD_compress2(zc, tmpDestBuffer, tmpDestSize, tmpSrcBuffer, chunkSizes[nbChunk]);
             if ((int)cSize <= 0) {
                 DISPLAY("Compress failed\n");
@@ -188,9 +290,12 @@ void* benchmark(void *args)
             tmpDestSize -= cSize;
             tmpSrcBuffer += chunkSizes[nbChunk];
             compSizes[nbChunk] = cSize;
+            GETTIME(endTicks);
+            nanosec = GETDIFFTIME(startTicks, endTicks);
+            bucketAdd(&compHistogram, nanosec);
+            compNanosecSum += nanosec;
         }
     }
-    GETTIME(endTicks);
 
     cSize = 0;
     for (nbChunk = 0; nbChunk < csCount; nbChunk++) {
@@ -210,14 +315,40 @@ void* benchmark(void *args)
         verifyResult = 0;
     }
 
-    ratio = (double) cSize / (double)srcSize;
-    nanosec = GETDIFFTIME(startTicks, endTicks);
-    speed = (double)(srcSize * nbIterations * NANOSEC) / nanosec;
-    DISPLAY("Thread %lu: Compression: %lu -> %lu, Throughput:%6.f MB/s, Compression Ratio: %6.2f %% %s\n",pthread_self(), srcSize,
-             cSize, (double) speed/MB, ratio * 100, verifyResult ? "PASS" : "FAIL");
+    pthread_barrier_wait(&g_threadBarrier2);
+     /* Start decompression benchmark */
+    for (loops = 0; loops < nbIterations; loops++) {
+        unsigned char* tmpDestBuffer = decompBuffer;
+        const unsigned char* tmpSrcBuffer = destBuffer;
+        size_t tmpDestSize = srcSize;
+        for (nbChunk = 0; nbChunk < csCount; nbChunk++) {
+            GETTIME(startTicks);
+            dcSzie = ZSTD_decompressDCtx(zdc, tmpDestBuffer, tmpDestSize, tmpSrcBuffer, compSizes[nbChunk]);
+            if ((int)cSize <= 0) {
+                DISPLAY("Decompress failed\n");
+                goto exit;
+            }
+            tmpDestBuffer += dcSzie;
+            tmpDestSize -= dcSzie;
+            tmpSrcBuffer += compSizes[nbChunk];
+            GETTIME(endTicks);
+            nanosec = GETDIFFTIME(startTicks, endTicks);
+            decompNanosecSum += nanosec;
+        }
+    }
 
+    /*Get current thread num */
+    threadNum = __sync_add_and_fetch(&g_threadNum, 1);
+
+    ratio = (double) cSize / (double)srcSize;
+    compSpeed = (double)(srcSize * nbIterations * NANOSEC) / compNanosecSum;
+    decompSpeed = (double)(srcSize * nbIterations * NANOSEC) / decompNanosecSum;
+    DISPLAY("Thread %lu: Compression: %lu -> %lu, Throughput: Comp: %5.f MB/s, Decomp: %5.f MB/s, Compression Ratio: %2.2f%%, %s\n",
+             threadNum, srcSize, cSize, (double) compSpeed/MB, (double) decompSpeed/MB, ratio * 100,
+             verifyResult ? "PASS" : "FAIL");
 exit:
     ZSTD_freeCCtx(zc);
+    ZSTD_freeDCtx(zdc);
     if (threadArgs->benchMode == 1 && matchState) {
         ZSTD_QAT_freeMatchState(matchState);
     }
@@ -251,10 +382,11 @@ int main(int argc, const char** argv)
         return usage(argv[0]);
 
     /* Set default value */
-    threadArgs.blockSize = 4096;
+    threadArgs.chunkSize = DEFAULT_CHUNK_SIZE;
     threadArgs.nbIterations = 1;
     threadArgs.cLevel = 1;
     threadArgs.benchMode = 1;
+    threadArgs.searchForExternalRepcodes = 0;
 
     for (argNb = 1; argNb < argc; argNb++) {
         const char* arg = argv[argNb];
@@ -275,10 +407,10 @@ int main(int argc, const char** argv)
                         return -1;
                     }
                     break;
-                    /* Set block size */
-                case 'b':
+                    /* Set chunk size */
+                case 'c':
                     arg++;
-                    threadArgs.blockSize = stringToU32(&arg);
+                    threadArgs.chunkSize = stringToU32(&arg);
                     break;
                     /* Set iterations */
                 case 'l':
@@ -289,6 +421,11 @@ int main(int argc, const char** argv)
                 case 'm':
                     arg++;
                     threadArgs.benchMode = stringToU32(&arg);
+                    break;
+                    /* Set searchForExternalRepcodes */
+                case 'E':
+                    arg++;
+                    threadArgs.searchForExternalRepcodes = 1;
                     break;
                     /* Set compression level */
                 case 'L':
@@ -329,8 +466,10 @@ int main(int argc, const char** argv)
 
     threadArgs.srcBuffer = srcBuffer;
     threadArgs.srcSize = srcSize;
+    initHistorgram(&compHistogram);
 
-    pthread_barrier_init(&g_threadBarrier, NULL, nbThreads);
+    pthread_barrier_init(&g_threadBarrier1, NULL, nbThreads);
+    pthread_barrier_init(&g_threadBarrier2, NULL, nbThreads);
     for(threadNb = 0; threadNb < nbThreads; threadNb++){
         pthread_create(&threads[threadNb], NULL, benchmark, &threadArgs);
     }
@@ -339,7 +478,34 @@ int main(int argc, const char** argv)
         pthread_join(threads[threadNb], NULL);
     }
 
-    pthread_barrier_destroy(&g_threadBarrier);
+    if (compHistogram.num != 0) {
+        /* Display Latency statistics */
+        DISPLAY("-----------------------------------------------------------\n");
+        DISPLAY("Latency Percentiles: P25: %4.2f us, P50: %4.2f us, P75: %4.2f us, P99: %4.2f us, Avg: %4.2f us\n",
+                 percentile(&compHistogram, 25)/NANOUSEC,
+                 percentile(&compHistogram, 50)/NANOUSEC,
+                 percentile(&compHistogram, 75)/NANOUSEC,
+                 percentile(&compHistogram, 99)/NANOUSEC,
+                (double)(compHistogram.sum/compHistogram.num/NANOUSEC));
+
+#ifdef DISPLAY_HISTOGRAM
+        DISPLAY("Latency histogram(nanosec): count: %lu\n", compHistogram.num);
+        size_t cumulativeSum = 0;
+        for(int i = 0; i < compHistogram.bucketCount; i++) {
+            if(compHistogram.bucket[i] != 0) {
+                cumulativeSum += compHistogram.bucket[i];
+                DISPLAY("[%10lu, %10lu] %10lu %7.2f%% %7.2f%%\n",
+                i == 0 ? 0 : compHistogram.bucketValue[i - 1], compHistogram.bucketValue[i],
+                compHistogram.bucket[i],
+                (double)compHistogram.bucket[i] * 100 / compHistogram.num,
+                (double)cumulativeSum * 100 / compHistogram.num);
+            }
+        }
+#endif
+    }
+
+    pthread_barrier_destroy(&g_threadBarrier1);
+    pthread_barrier_destroy(&g_threadBarrier2);
     close(inputFile);
     free(srcBuffer);
     return 0;
