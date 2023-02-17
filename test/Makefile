@@ -42,14 +42,17 @@ else
 LDFLAGS += /usr/local/lib/libzstd.a
 endif
 
-default: test
+default: test benchmark
 
-all: test
+all: test benchmark
 
 test: test.c
 	$(Q)$(MAKE) -C $(LIB)
 	$(CC) $^ $(LDFLAGS) -o $@
 
+benchmark: benchmark.c
+	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@ -lpthread
+
 clean:
 	$(Q)$(MAKE) -C $(LIB) $@
-	$(RM) test
+	$(RM) test benchmark
