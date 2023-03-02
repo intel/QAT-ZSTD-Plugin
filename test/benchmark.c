@@ -54,6 +54,10 @@
 #define MB (1000000)   /* 1MB */
 #define BUCKET_NUM  200
 #define DEFAULT_CHUNK_SIZE (32 * 1024)
+#define ZSTD_AUTO     0
+#define ZSTD_DISABLED 1
+#define ZSTD_ENABLED  2
+
 
 #ifndef MIN
     #define MIN(a,b) ((a)<(b)?(a):(b))
@@ -64,13 +68,14 @@
 #define GETTIME(now) {clock_gettime(CLOCK_MONOTONIC, &now);};
 #define GETDIFFTIME(start_ticks, end_ticks) (1000000000ULL*( end_ticks.tv_sec - start_ticks.tv_sec ) + ( end_ticks.tv_nsec - start_ticks.tv_nsec ))
 
+
 typedef struct {
     size_t chunkSize; /* the max chunk size of ZSTD_compress2 */
     size_t srcSize;  /* Input file size */
     unsigned cLevel; /* Compression Level 1 - 12 */
     unsigned nbIterations; /* Number test loops, default is 1 */
     char benchMode; /* 0: software compression, 1: QAT compression*/
-    char searchForExternalRepcodes; /* 0: disable, 1: enable */
+    char searchForExternalRepcodes; /* 0: auto 1: enable, 2: disable */
     const unsigned char* srcBuffer; /* Input data point */
 } threadArgs_t;
 
@@ -169,7 +174,7 @@ static int usage(const char* exe)
     DISPLAY("    -t#       Set maximum threads [1 - 128] (default: 1)\n");
     DISPLAY("    -l#       Set iteration loops [1 - 1000000](default: 1)\n");
     DISPLAY("    -c#       Set chunk size (default: 32K)\n");
-    DISPLAY("    -E        Enable/disbale searchForExternalRepcodes(default: Disabled)\n");
+    DISPLAY("    -E#       Auto/enable/disable searchForExternalRepcodes(0: auto; 1: enable; 2: disable; default: auto)\n");
     DISPLAY("    -L#       Set compression level [1 - 12] (default: 1)\n");
     DISPLAY("    -m#       Benchmark mode, 0: software compression; 1:QAT compression(default: 1) \n");
     DISPLAY("    -h/H      Print this help message\n");
@@ -223,7 +228,7 @@ void* benchmark(void *args)
     size_t nanosec = 0;
     size_t compNanosecSum = 0, decompNanosecSum = 0;
     double compSpeed = 0, decompSpeed = 0, ratio = 0;
-    size_t csCount, nbChunk, destSize, cSize, dcSzie;
+    size_t csCount, nbChunk, destSize, cSize, dcSize;
     struct timespec startTicks, endTicks;
     unsigned char* destBuffer = NULL, *decompBuffer = NULL;
     const unsigned char* srcBuffer = threadArgs->srcBuffer;
@@ -253,20 +258,24 @@ void* benchmark(void *args)
     if (threadArgs->benchMode == 1) {
         matchState = ZSTD_QAT_createMatchState();
         ZSTD_registerSequenceProducer(zc, matchState, qatMatchfinder);
+    } else if (threadArgs->benchMode == 0){
+	ZSTD_registerSequenceProducer(zc, NULL, NULL);
     }
 
-    if (threadArgs->searchForExternalRepcodes) {
+    if (threadArgs->searchForExternalRepcodes == ZSTD_ENABLED) {
 	rc = ZSTD_CCtx_setParameter(zc, ZSTD_c_searchForExternalRepcodes, ZSTD_ps_enable);
-    } else {
+    } else if (threadArgs->searchForExternalRepcodes == ZSTD_DISABLED) {
 	rc = ZSTD_CCtx_setParameter(zc, ZSTD_c_searchForExternalRepcodes, ZSTD_ps_disable);
+    } else {
+	rc = ZSTD_CCtx_setParameter(zc, ZSTD_c_searchForExternalRepcodes, ZSTD_ps_auto);
     }
-    if ((int)rc <= 0) {
+    if (ZSTD_isError(rc)) {
         DISPLAY("Fail to set parameter ZSTD_c_searchForExternalRepcodes\n");
         goto exit;
     }
 
     rc = ZSTD_CCtx_setParameter(zc, ZSTD_c_compressionLevel, cLevel);
-    if ((int)rc <= 0) {
+    if (ZSTD_isError(rc)) {
         DISPLAY("Fail to set parameter ZSTD_c_compressionLevel\n");
         goto exit;
     }
@@ -282,7 +291,8 @@ void* benchmark(void *args)
         for (nbChunk = 0; nbChunk < csCount; nbChunk++) {
             GETTIME(startTicks);
             cSize = ZSTD_compress2(zc, tmpDestBuffer, tmpDestSize, tmpSrcBuffer, chunkSizes[nbChunk]);
-            if ((int)cSize <= 0) {
+            GETTIME(endTicks);
+            if (ZSTD_isError(cSize)) {
                 DISPLAY("Compress failed\n");
                 goto exit;
             }
@@ -290,7 +300,6 @@ void* benchmark(void *args)
             tmpDestSize -= cSize;
             tmpSrcBuffer += chunkSizes[nbChunk];
             compSizes[nbChunk] = cSize;
-            GETTIME(endTicks);
             nanosec = GETDIFFTIME(startTicks, endTicks);
             bucketAdd(&compHistogram, nanosec);
             compNanosecSum += nanosec;
@@ -305,7 +314,7 @@ void* benchmark(void *args)
     /* Verify the compression result */
     rc = ZSTD_decompress(decompBuffer, srcSize, destBuffer, cSize);
     if (rc != srcSize) {
-        DISPLAY("Decompressed size in not equal to source size\n");
+        DISPLAY("Decompressed size is not equal to source size\n");
         goto exit;
     }
     /* Compare original buffer with decompress output */
@@ -323,15 +332,15 @@ void* benchmark(void *args)
         size_t tmpDestSize = srcSize;
         for (nbChunk = 0; nbChunk < csCount; nbChunk++) {
             GETTIME(startTicks);
-            dcSzie = ZSTD_decompressDCtx(zdc, tmpDestBuffer, tmpDestSize, tmpSrcBuffer, compSizes[nbChunk]);
-            if ((int)cSize <= 0) {
+            dcSize = ZSTD_decompressDCtx(zdc, tmpDestBuffer, tmpDestSize, tmpSrcBuffer, compSizes[nbChunk]);
+            GETTIME(endTicks);
+            if (ZSTD_isError(dcSize)) {
                 DISPLAY("Decompress failed\n");
                 goto exit;
             }
-            tmpDestBuffer += dcSzie;
-            tmpDestSize -= dcSzie;
+            tmpDestBuffer += dcSize;
+            tmpDestSize -= dcSize;
             tmpSrcBuffer += compSizes[nbChunk];
-            GETTIME(endTicks);
             nanosec = GETDIFFTIME(startTicks, endTicks);
             decompNanosecSum += nanosec;
         }
@@ -386,7 +395,7 @@ int main(int argc, const char** argv)
     threadArgs.nbIterations = 1;
     threadArgs.cLevel = 1;
     threadArgs.benchMode = 1;
-    threadArgs.searchForExternalRepcodes = 0;
+    threadArgs.searchForExternalRepcodes = ZSTD_AUTO;
 
     for (argNb = 1; argNb < argc; argNb++) {
         const char* arg = argv[argNb];
@@ -425,7 +434,13 @@ int main(int argc, const char** argv)
                     /* Set searchForExternalRepcodes */
                 case 'E':
                     arg++;
-                    threadArgs.searchForExternalRepcodes = 1;
+                    threadArgs.searchForExternalRepcodes = stringToU32(&arg);
+		    if (threadArgs.searchForExternalRepcodes != ZSTD_AUTO &&
+                        threadArgs.searchForExternalRepcodes != ZSTD_ENABLED &&
+                        threadArgs.searchForExternalRepcodes != ZSTD_DISABLED) {
+                        DISPLAY("Invalid searchForExternalRepcodes parameter\n");
+			return usage(argv[0]);
+		    }
                     break;
                     /* Set compression level */
                 case 'L':
