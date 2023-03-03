@@ -47,7 +47,7 @@
 #define ZSTD_STATIC_LINKING_ONLY
 #include "zstd.h"
 #include "zstd_errors.h"
-#include "../src/qatmatchfinder.h"
+#include "qatseqprod.h"
 
 #define NANOSEC (1000000000ULL) /* 1 second */
 #define NANOUSEC (1000) /* 1 usec */
@@ -55,8 +55,8 @@
 #define BUCKET_NUM  200
 #define DEFAULT_CHUNK_SIZE (32 * 1024)
 #define ZSTD_AUTO     0
-#define ZSTD_DISABLED 1
-#define ZSTD_ENABLED  2
+#define ZSTD_ENABLED  1
+#define ZSTD_DISABLED 2
 
 
 #ifndef MIN
@@ -256,9 +256,10 @@ void* benchmark(void *args)
     assert(destBuffer != NULL);
 
     if (threadArgs->benchMode == 1) {
-        matchState = ZSTD_QAT_createMatchState();
-        ZSTD_registerSequenceProducer(zc, matchState, qatMatchfinder);
-    } else if (threadArgs->benchMode == 0){
+        QZSTD_startQatDevice();
+        matchState = QZSTD_createSeqProdState();
+        ZSTD_registerSequenceProducer(zc, matchState, qatSequenceProducer);
+    } else {
 	ZSTD_registerSequenceProducer(zc, NULL, NULL);
     }
 
@@ -350,8 +351,8 @@ void* benchmark(void *args)
     threadNum = __sync_add_and_fetch(&g_threadNum, 1);
 
     ratio = (double) cSize / (double)srcSize;
-    compSpeed = (double)(srcSize * nbIterations * NANOSEC) / compNanosecSum;
-    decompSpeed = (double)(srcSize * nbIterations * NANOSEC) / decompNanosecSum;
+    compSpeed = (double)(srcSize * nbIterations ) / ((double)compNanosecSum / NANOSEC);
+    decompSpeed = (double)(srcSize * nbIterations ) / ((double)decompNanosecSum / NANOSEC);
     DISPLAY("Thread %lu: Compression: %lu -> %lu, Throughput: Comp: %5.f MB/s, Decomp: %5.f MB/s, Compression Ratio: %2.2f%%, %s\n",
              threadNum, srcSize, cSize, (double) compSpeed/MB, (double) decompSpeed/MB, ratio * 100,
              verifyResult ? "PASS" : "FAIL");
@@ -359,7 +360,8 @@ exit:
     ZSTD_freeCCtx(zc);
     ZSTD_freeDCtx(zdc);
     if (threadArgs->benchMode == 1 && matchState) {
-        ZSTD_QAT_freeMatchState(matchState);
+        QZSTD_freeSeqProdState(matchState);
+        QZSTD_stopQatDevice();
     }
     if (chunkSizes) {
         free(chunkSizes);
