@@ -36,14 +36,20 @@
 .PHONY: default
 default: lib
 
-DESTLIBDIR     ?= /usr/local/lib
-DESTINCLUDEDIR ?= /usr/local/include
+INSTALLDIR ?= /usr/local
+LIBDIR     ?= $(INSTALLDIR)/lib
+INCLUDEDIR ?= $(INSTALLDIR)/include
 
 CP ?= cp
 
 QATFLAGS = -I$(ICP_ROOT)/quickassist/include	\
 		   -I$(ICP_ROOT)/quickassist/include/dc	\
 		   -I$(ICP_ROOT)/quickassist/lookaside/access_layer/include
+
+ifdef ZSTDLIB
+CFLAGS   += -I$(ZSTDLIB)
+endif
+
 LDFLAGS  = -L$(ICP_ROOT)/build -lqat_s
 
 ENABLE_USDM_DRV ?= 0
@@ -52,31 +58,36 @@ ifneq ($(ENABLE_USDM_DRV), 0)
   	LDFLAGS  += -lusdm_drv_s
 endif
 
-ENABLE_DEBUG ?=0
-ifneq ($(ENABLE_DEBUG), 0)
+DEBUGLEVEL ?=0
+ifneq ($(DEBUGLEVEL), 0)
 	DEBUGFLAGS += -DENABLE_DEBUG -g -O0
+else
+	QATFLAGS += -O3
 endif
 
 CFLAGS += -fPIC
 
-qatmatchfinder.o: qatmatchfinder.c
+qatseqprod.o: qatseqprod.c
 	$(CC) -c $(CFLAGS) $(QATFLAGS) $(DEBUGFLAGS) $(LDFLAGS)  $^ -o $@
 
-lib: qatmatchfinder.o
-	$(AR) rc libqatmf.a $^
+lib: qatseqprod.o
+	$(AR) rc libqatseqprod.a $^
+	$(CC) -shared qatseqprod.o -o libqatseqprod.so
 
 .PHONY: install
 install: lib
-	$(CP) libqatmf.a $(DESTLIBDIR)
-	$(CP) qatmatchfinder.h $(DESTINCLUDEDIR)
-	@echo qatmatchfinder library successfully installed
+	$(CP) libqatseqprod.a $(LIBDIR)
+	$(CP) libqatseqprod.so $(LIBDIR)
+	$(CP) qatseqprod.h $(INCLUDEDIR)
+	@echo qatseqprod library successfully installed
 
 .PHONY: uninstall
 uninstall:
-	$(RM) $(DESTLIBDIR)/libqatmf.a
-	$(RM) $(DESTINCLUDEDIR)/qatmatchfinder.h
-	@echo qatmatchfinder library successfully uninstalled
+	$(RM) $(LIBDIR)/libqatseqprod.a
+	$(RM) $(LIBDIR)/libqatseqprod.so
+	$(RM) $(INCLUDEDIR)/qatseqprod.h
+	@echo qatseqprod library successfully uninstalled
 
 clean:
 	$(RM) *.o
-	$(RM) libqatmf.a
+	$(RM) libqatseqprod.a libqatseqprod.so

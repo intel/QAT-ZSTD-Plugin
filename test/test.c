@@ -42,10 +42,11 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "qatseqprod.h"
+
 #define ZSTD_STATIC_LINKING_ONLY
 #include "zstd.h"
 #include "zstd_errors.h"
-#include "qatmatchfinder.h"
 
 int main(int argc, char *argv[]) {
     char *inputFileName = NULL;
@@ -60,7 +61,8 @@ int main(int argc, char *argv[]) {
     size_t cSize = 0;
     size_t res = 0;
     ZSTD_CCtx* const zc = ZSTD_createCCtx();
-    void *matchState = ZSTD_QAT_createMatchState();
+    QZSTD_startQatDevice();
+    void *sequenceProducerState = QZSTD_createSeqProdState();
 
     if (argc != 2) {
         printf("Usage: test <file>\n");
@@ -94,11 +96,11 @@ int main(int argc, char *argv[]) {
     decompBuffer = malloc(bytesRead);
     assert(decompBuffer);
 
-    /* register qatmatchfinder */
+    /* register qatSequenceProducer */
     ZSTD_registerSequenceProducer(
         zc,
-        matchState,
-        qatMatchfinder
+        sequenceProducerState,
+        qatSequenceProducer
     );
 
     res = ZSTD_CCtx_setParameter(zc, ZSTD_c_enableSeqProducerFallback, 1);
@@ -132,7 +134,8 @@ int main(int argc, char *argv[]) {
 
 exit:
     ZSTD_freeCCtx(zc);
-    ZSTD_QAT_freeMatchState(matchState);
+    QZSTD_freeSeqProdState(sequenceProducerState);
+    QZSTD_stopQatDevice();
     free(srcBuffer);
     free(dstBuffer);
     free(decompBuffer);

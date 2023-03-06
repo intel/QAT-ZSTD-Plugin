@@ -33,44 +33,44 @@
  *
  ***************************************************************************/
 
-#ifndef ZSTD_QAT_H
-#define ZSTD_QAT_H
+#ifndef QATSEQPROD_H
+#define QATSEQPROD_H
 
 #define ZSTD_STATIC_LINKING_ONLY
 #include "zstd.h"
 
-/** qatMatchfinder:
- *    Block-level matchfinder with QAT, this implementation can be registered to
- *  zstd by ZSTD_registerExternalMatchFinder for replacing internal block-level
- *  matchfinder. With this matchfinder, zstd can offload the process of searching
- *  matched sequeces to QAT device
+/** qatSequenceProducer:
+ *    Block-level sequence producer with QAT, this implementation can be registered to
+ *  zstd by ZSTD_registerSequenceProducer for replacing internal block-level
+ *  sequence producer. With this sequence producer, zstd can offload the process of producing
+ *  block level sequeces to QAT device
  */
-size_t qatMatchfinder(
-    void* externalMatchState, ZSTD_Sequence* outSeqs, size_t outSeqsCapacity,
+size_t qatSequenceProducer(
+    void* sequenceProducerState, ZSTD_Sequence* outSeqs, size_t outSeqsCapacity,
     const void* src, size_t srcSize,
     const void* dict, size_t dictSize,
     int compressionLevel,
     size_t windowSize
 );
 
-/** ZSTD_QAT_startQatDevice:
+/** QZSTD_startQatDevice:
  *    Start QAT device
  */
-int ZSTD_QAT_startQatDevice(ZSTD_CCtx *cctx);
+int QZSTD_startQatDevice(void);
 
-/** ZSTD_QAT_stopQatDevice:
+/** QZSTD_stopQatDevice:
  *    Stop QAT device
  */
-void ZSTD_QAT_stopQatDevice(void);
+void QZSTD_stopQatDevice(void);
 
-/** ZSTD_QAT_createMatchState:
- *    Create externalMatchState for qatMatchfinder
+/** QZSTD_createSeqProdState:
+ *    Create sequence producer state for qatSequenceProducer
  */
-void *ZSTD_QAT_createMatchState(void);
+void *QZSTD_createSeqProdState(void);
 
-/** ZSTD_QAT_freeMatchState:
- *    Free externalMatchState qatMatchfinder used
+/** QZSTD_freeSeqProdState:
+ *    Free sequence producer state qatSequenceProducer used
  */
-void ZSTD_QAT_freeMatchState(void *matchState);
+void QZSTD_freeSeqProdState(void *sequenceProducerState);
 
-#endif /* ZSTD_QAT_H */
+#endif /* QATSEQPROD_H */
