@@ -32,22 +32,24 @@
 #   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 # #######################################################################
+LIB     = ../src
 
-CFLAGS  += -std=gnu99 -g -O3
-DEBUGFLAGS= -Wall -Wextra -Wcast-qual -Wcast-align -Wshadow \
-            -Wstrict-aliasing=1 -Wswitch-enum \
-            -Wstrict-prototypes -Wundef -Wpointer-arith \
-            -Wvla -Wformat=2 -Winit-self -Wfloat-equal -Wwrite-strings \
-            -Wredundant-decls
-CFLAGS  += $(DEBUGFLAGS)
-LDFLAGS += -lqatmf -lzstd -L/usr/local/lib -lqat_s -lusdm_drv_s
+LDFLAGS += -lqat_s -lusdm_drv_s $(LIB)/libqatseqprod.a -I$(LIB)
+
+ifdef ZSTDLIB
+LDFLAGS += $(ZSTDLIB)/libzstd.a -I$(ZSTDLIB)
+else
+LDFLAGS += /usr/local/lib/libzstd.a
+endif
 
 default: test
 
 all: test
 
 test: test.c
-	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
+	$(Q)$(MAKE) -C $(LIB)
+	$(CC) $^ $(LDFLAGS) -o $@
 
 clean:
+	$(Q)$(MAKE) -C $(LIB) $@
 	$(RM) test
