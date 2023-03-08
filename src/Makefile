@@ -58,14 +58,21 @@ ifneq ($(ENABLE_USDM_DRV), 0)
   	LDFLAGS  += -lusdm_drv_s
 endif
 
+CFLAGS += -Wall -Werror -Wextra -Wcast-qual -Wcast-align -Wshadow \
+          -Wstrict-aliasing=1 -Wswitch-enum -Wdeclaration-after-statement \
+          -Wstrict-prototypes -Wundef -Wpointer-arith -Wvla -Wformat=2 \
+		  -Winit-self -Wfloat-equal -Wwrite-strings -Wredundant-decls \
+		  -Wc++-compat -pedantic -fstack-protector-strong -fPIE -fPIC \
+		  -fno-delete-null-pointer-checks -fwrapv -fno-strict-overflow
+
 DEBUGLEVEL ?=0
+
+DEBUGFLAGS += -DDEBUGLEVEL=$(DEBUGLEVEL)
 ifneq ($(DEBUGLEVEL), 0)
-	DEBUGFLAGS += -DENABLE_DEBUG -g -O0
+	QATFLAGS += -g -O0
 else
 	QATFLAGS += -O3
 endif
-
-CFLAGS += -fPIC
 
 qatseqprod.o: qatseqprod.c
 	$(CC) -c $(CFLAGS) $(QATFLAGS) $(DEBUGFLAGS) $(LDFLAGS)  $^ -o $@
