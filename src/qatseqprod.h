@@ -32,6 +32,9 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  ***************************************************************************/
+#if defined (__cplusplus)
+extern "C" {
+#endif
 
 #ifndef QATSEQPROD_H
 #define QATSEQPROD_H
@@ -74,3 +77,7 @@ void *QZSTD_createSeqProdState(void);
 void QZSTD_freeSeqProdState(void *sequenceProducerState);
 
 #endif /* QATSEQPROD_H */
+
+#if defined (__cplusplus)
+}
+#endif
