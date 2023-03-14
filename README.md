@@ -41,6 +41,21 @@ Download from [Linux* Hardware v2.0][*] and follow the guidance: [Intel® QAT So
 [*]:https://www.intel.com/content/www/us/en/download/765501.html
 [**]:https://cdrdv2.intel.com/v1/dl/getContent/632506
 
+After installing QAT driver, you need to update configuration files according to your requirements refer to QAT's programmer’s guide.
+
+Intel&reg; QAT Zstd Plugin needs a [SHIM] section by default.
+There are two ways to change:
+* QAT driver default conf file does not contain a [SHIM] section which the Intel&reg; QAT Zstd Plugin
+  requires by default. You can add a [SHIM] section for Intel&reg; QAT Zstd Plugin.
+* The default section name in the Intel&reg; QAT Zstd Plugin can be modified if required by setting the environment
+variable "QAT_SECTION_NAME".
+
+After updating configuration files, please restart QAT.
+
+```bash
+    service qat_service restart
+```
+
 ### Build qatseqprod library with SVM mode
 
 SVM environment must be prepared before using SVM mode.

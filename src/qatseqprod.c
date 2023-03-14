@@ -79,6 +79,8 @@
 #define MAX_SEND_REQUEST_RETRY         (5)
 #define MAX_DEVICES                    (256)
 
+#define SECTION_NAME_SIZE              (32)
+
 #define INTER_SZ(src_sz) (2 * (src_sz))
 #define COMPRESS_SRC_BUFF_SZ (ZSTD_BLOCKSIZE_MAX)
 #define DC_CEIL_DIV(x, y) (((x) + (y)-1) / (y))
@@ -479,6 +481,23 @@ static int QZSTD_setInstance(unsigned int devId,
     return QZSTD_OK;
 }
 
+const char *getSectionName(void)
+{
+    static char sectionName[SECTION_NAME_SIZE];
+    int len;
+    char *preSectionName;
+    preSectionName = getenv("QAT_SECTION_NAME");
+
+    if (!preSectionName || !(len = strlen(preSectionName))) {
+        preSectionName = (char *)"SHIM";
+    } else if (len >= SECTION_NAME_SIZE) {
+        QZSTD_LOG(1, "The length of QAT_SECTION_NAME exceeds the limit\n");
+    }
+    strncpy(sectionName, preSectionName, SECTION_NAME_SIZE - 1);
+    sectionName[SECTION_NAME_SIZE - 1] = '\0';
+    return sectionName;
+}
+
 static int QZSTD_salUserStart(void)
 {
     Cpa32U pcieCount;
@@ -493,7 +512,7 @@ static int QZSTD_salUserStart(void)
         return QZSTD_FAIL;
     }
 
-    if (CPA_STATUS_SUCCESS != icp_sal_userStart("SHIM")) {
+    if (CPA_STATUS_SUCCESS != icp_sal_userStart(getSectionName())) {
         QZSTD_LOG(1, "icp_sal_userStart failed\n");
         return QZSTD_FAIL;
     }
