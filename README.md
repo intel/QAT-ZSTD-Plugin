@@ -20,26 +20,7 @@ Intel® 4xxx (Intel® QuickAssist Technology Gen 4)
 
 zstd library of version 1.5.4
 
-## Limitations
-
- 1. ZSTD sequence producer only support zstd compression API which respect advanced parameters.
- 2. The ZSTD_c_enableLongDistanceMatching cParam is not currently supported. Compression will fail if it is enabled and tries to compress with qatsequenceproducer.
- 3. Dictionaries are not currently supported. Compression will not fail if the user references a dictionary, but the dictionary won't have any effect.
- 4. Stream history is not currently supported. All advanced ZSTD compression APIs, including streaming APIs, work with qatsequenceproducer, but each block is treated as an independent chunk without history from previous blocks.
- 5. Multi-threading within a single compression is not currently supported. In other words, compression will fail if ZSTD_c_nbWorkers > 0 and an external sequence producer is registered. Multi-threading across compressions is fine: simply create one CCtx per thread.
-
-For more details about ZSTD sequence producer, please refer to [zstd.h][*]
-
-[*]:[https://github.com/facebook/zstd/blob/dev/lib/zstd.h]
-
-## Installation Instructions
-
-### Build and install Intel&reg; QuickAssist Technology Driver
-
-Download from [Linux* Hardware v2.0][*] and follow the guidance: [Intel® QAT Software for Linux—Getting Started Guide: Hardware v2.0][**]
-
-[*]:https://www.intel.com/content/www/us/en/download/765501.html
-[**]:https://cdrdv2.intel.com/v1/dl/getContent/632506
+[Intel® QAT Driver for Linux* Hardware v2.0][*], follow the guidance: [Intel® QAT Software for Linux—Getting Started Guide: Hardware v2.0][**]
 
 After installing QAT driver, you need to update configuration files according to your requirements refer to QAT's programmer’s guide.
 
@@ -56,39 +37,51 @@ After updating configuration files, please restart QAT.
     service qat_service restart
 ```
 
+[*]:https://www.intel.com/content/www/us/en/download/765501.html
+[**]:https://intel.github.io/quickassist/
+
+## Limitations
+ 1. Only support compression level from L1 to L12
+ 2. ZSTD sequence producer only support zstd compression API which respect advanced parameters.
+ 3. The ZSTD_c_enableLongDistanceMatching cParam is not currently supported. Compression will fail if it is enabled and tries to compress with qatsequenceproducer.
+ 4. Dictionaries are not currently supported. Compression will not fail if the user references a dictionary, but the dictionary won't have any effect.
+ 5. Stream history is not currently supported. All advanced ZSTD compression APIs, including streaming APIs, work with qatsequenceproducer, but each block is treated as an independent chunk without history from previous blocks.
+ 6. Multi-threading within a single compression is not currently supported. In other words, compression will fail if ZSTD_c_nbWorkers > 0 and an external sequence producer is registered. Multi-threading across compressions is fine: simply create one CCtx per thread.
+
+For more details about ZSTD sequence producer, please refer to [zstd.h][*]
+
+[*]:[https://github.com/facebook/zstd/blob/dev/lib/zstd.h]
+
+## Installation Instructions
+
 ### Build qatseqprod library with SVM mode
 
-SVM environment must be prepared before using SVM mode.
+Before using SVM, you need to modify BIOS and driver configuration files to enable SVM refer to [QAT's programmer’s guide][*].
+
+[*]:https://www.intel.com/content/www/us/en/content-details/743912/intel-quickassist-technology-intel-qat-software-for-linux-programmers-guide-hardware-version-2-0.html
 
 ```bash
-    # You can choose whether to install zstd 1.5.4,
-    # if not, you can manually specify path to zstd.h
-    make ZSTDLIB=[PATH TO ZSTD LIB]
+    make
 ```
+
+If you didn't install zstd 1.5.4 library, you can specify path to zstd lib source root by compile variable "ZSTDLIB".
 
 ### Build qatseqprod library with USDM mode
 
-USDM is also supported, just choose one of these two modes accordding to your needs.
-
-```bash
-    # You can choose whether to install zstd 1.5.4,
-    # if not, you can manually specify path
-    make ENABLE_USDM_DRV=1 ZSTDLIB=[PATH TO ZSTD LIB]
-```
+USDM is also supported, just choose one of these two modes according to your needs.
 
 ### Build and run test program
 
 ```bash
-    # Specify filename of libzstd.a and libqatseqprod.a
-    # if you didn't install them
-    make test ZSTDLIB=[PATH TO ZSTD LIB]
+    make test
     ./test/test [TEST FILENAME]
 ```
 
 ### Build and run benchmark tool
 
 ```bash
-
+    make benchmark
+    ./test/benchmark [TEST FILENAME]
 ```
 
 ###
@@ -97,7 +90,7 @@ USDM is also supported, just choose one of these two modes accordding to your ne
 
 **Register qatsequenceproducer in your code**
 
-Call ZSTD_registerSequenceProducer to register qatsequenceproducer in your application source code
+Call ZSTD_registerSequenceProducer to register qatsequenceproducer in your application source code.
 
 ```c
     /* Example code */
