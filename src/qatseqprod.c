@@ -65,6 +65,8 @@
 #include "icp_sal_poll.h"
 #include "icp_sal_user.h"
 
+#include "qatseqprod.h"
+
 #ifdef ENABLE_USDM_DRV
 #include "qae_mem.h"
 #endif
@@ -100,15 +102,6 @@
 
 #define TIMESPENT(a, b) ((a.tv_sec * 1000000 + a.tv_usec) - (b.tv_sec * 1000000 + b.tv_usec))
 
-/** QZSTD_Status_e:
- *  Error code indicates status
- */
-typedef enum {
-    QZSTD_OK = 0,       /* Success */
-    QZSTD_STARTED = 1,  /* QAT device started */
-    QZSTD_FAIL = -1     /* Unspecified error */
-} QZSTD_Status_e;
-
 /** QZSTD_Session_T:
  *  This structure contains all session parameters including a buffer used to store
  *  lz4s output for current session and other parameters
@@ -122,8 +115,8 @@ typedef struct QZSTD_Session_S {
 } QZSTD_Session_T;
 
 /** QZSTD_Instance_T:
- *  This structure cantains instance parameter, every session need to grab one
- *  instance to sumbit request
+ *  This structure contains instance parameter, every session need to grab one
+ *  instance to submit request
  */
 typedef struct QZSTD_Instance_S {
     CpaInstanceInfo2 instanceInfo;
@@ -154,7 +147,7 @@ typedef struct QZSTD_Instance_S {
 } QZSTD_Instance_T;
 
 /** QZSTD_ProcessData_T:
- *  Process data for controling instance resource
+ *  Process data for controlling instance resource
  */
 typedef struct QZSTD_ProcessData_S {
     int qzstdInitStatus;
@@ -202,6 +195,11 @@ int debugLevel = DEBUGLEVEL;
             if (l<=debugLevel) {                              \
                 QZSTD_DEBUG_PRINT(__FILE__ ": " __VA_ARGS__);   \
         }   }
+
+const char * QZSTD_version(void)
+{
+    return QZSTD_VERSION;
+}
 
 /** QZSTD_calloc:
  *    This function is used to allocate contiguous or discontiguous memory(initialized to zero)
@@ -347,7 +345,7 @@ static void QZSTD_removeSession(int i)
     /* Remove session */
     if ((NULL != gProcess.dcInstHandle[i]) &&
         (NULL != gProcess.qzstdInst[i].cpaSessHandle)) {
-        /* polling here if there still are some reponse haven't beed polled
+        /* polling here if there still are some responses haven't beed polled
         *  if didn't poll there response, cpaDcRemoveSession will raise error message
         */
         do {
@@ -651,7 +649,7 @@ exit:
     return QZSTD_FAIL;
 }
 
-static void ZSTD_QAT_dcCallback(void *cbDataTag, CpaStatus stat)
+static void QZSTD_dcCallback(void *cbDataTag, CpaStatus stat)
 {
     if (NULL != cbDataTag) {
         QZSTD_Instance_T *qzstdInst = (QZSTD_Instance_T *)cbDataTag;
@@ -859,7 +857,7 @@ static int QZSTD_cpaInitSess(QZSTD_Session_T *sess, int i)
 
     if (CPA_STATUS_SUCCESS != cpaDcInitSession(
         gProcess.dcInstHandle[i], gProcess.qzstdInst[i].cpaSessHandle,
-        &sess->sessionSetupData, NULL, ZSTD_QAT_dcCallback)) {
+        &sess->sessionSetupData, NULL, QZSTD_dcCallback)) {
         QZSTD_LOG(1, "cpaDcInitSession failed\n");
         QZSTD_free(gProcess.qzstdInst[i].cpaSessHandle, reqPhyContMem);
         gProcess.qzstdInst[i].cpaSessHandle = NULL;
@@ -1157,7 +1155,7 @@ size_t qatSequenceProducer(
         }
     }
 
-    /* update cpaSessHandle */
+    /* update cpaSessHandle if need */
     if (0 != memcmp(&zstdSess->sessionSetupData,
         &gProcess.qzstdInst[i].sessionSetupData,
         sizeof(CpaDcSessionSetupData))) {
@@ -1168,6 +1166,7 @@ size_t qatSequenceProducer(
         }
     }
 
+    /* Allocate intermediate buffer for storing lz4s format compressed by QAT */
     if (NULL == zstdSess->qatIntermediateBuf) {
         zstdSess->qatIntermediateBuf =
         (unsigned char *)QZSTD_calloc(1, INTERMEDIATE_BUFFER_SZ,
@@ -1199,6 +1198,7 @@ size_t qatSequenceProducer(
     gProcess.qzstdInst[i].res.checksum = 0;
 
     do {
+        /* Submit request to QAT */
         qrc = cpaDcCompressData2(gProcess.dcInstHandle[i],
                                 gProcess.qzstdInst[i].cpaSessHandle,
                                 gProcess.qzstdInst[i].srcBuffer,
@@ -1218,6 +1218,7 @@ size_t qatSequenceProducer(
     (void)gettimeofday(&timeStart, NULL);
 
     do {
+        /* Poll responses */
         qrc = icp_sal_DcPollInstance(gProcess.dcInstHandle[i], 0);
         (void)gettimeofday(&timeNow, NULL);
         if (QZSTD_isTimeOut(timeStart, timeNow)) {
