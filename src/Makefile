@@ -75,11 +75,11 @@ else
 endif
 
 qatseqprod.o: qatseqprod.c
-	$(CC) -c $(CFLAGS) $(QATFLAGS) $(DEBUGFLAGS) $(LDFLAGS)  $^ -o $@
+	$(CC) -c $(CFLAGS) $(QATFLAGS) $(DEBUGFLAGS) $^ -o $@
 
 lib: qatseqprod.o
 	$(AR) rc libqatseqprod.a $^
-	$(CC) -shared qatseqprod.o -o libqatseqprod.so
+	$(CC) -shared $^ $(LDFLAGS) -o libqatseqprod.so
 
 .PHONY: install
 install: lib
