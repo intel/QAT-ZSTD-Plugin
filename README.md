@@ -3,14 +3,22 @@
 ## Table of Contents
 
 - [Introduction](#introduction)
+- [Licensing](#licensing)
 - [Hardware Requirements](#hardware-requirements)
 - [Software Requirements](#software-requirements)
 - [Limitations](#limitations)
 - [Installation Instructions](#installation-instructions)
+- [Legal](#legal)
 
 ## Introduction
 
 Intel&reg; QuickAssist Technology (QAT) zstandard (ZSTD) plugin, Zstandard is a fast lossless compression algorithm, targeting real-time compression scenarios at zlib-level and better compression ratios. QAT sequence producer can accelerate the process of producing block level sequences of ZSTD.
+
+## Licensing
+
+The Licensing of the files within this project is split as follows:
+
+Intel&reg; QuickAssist Technology (QAT) zstandard (ZSTD) plugin - BSD License. Please see the `LICENSE` file contained in the top level folder. Further details can be found in the file headers of the relevant files.
 
 ## Hardware Requirements
 
@@ -143,6 +151,20 @@ No changes to your application with calling ZSTD compression API, just keep call
 ```
 
 Then link to libzstd and libqatseqprod like test program did.
+
+## Legal
+
+Intel&reg; disclaims all express and implied warranties, including without limitation, the implied warranties of merchantability, fitness for a particular purpose, and non-infringement, as well as any warranty arising from course of performance, course of dealing, or usage in trade.
+
+This document contains information on products, services and/or processes in development.  All information provided here is subject to change without notice. Contact your Intel&reg; representative to obtain the latest forecast, schedule, specifications and roadmaps.
+
+The products and services described may contain defects or errors known as errata which may cause deviations from published specifications. Current characterized errata are available on request.
+
+Copies of documents which have an order number and are referenced in this document may be obtained by calling 1-800-548-4725 or by visiting www.intel.com/design/literature.htm.
+
+Intel, the Intel logo are trademarks of Intel Corporation in the U.S. and/or other countries.
+
+\*Other names and brands may be claimed as the property of others
 
 [1]:https://www.intel.com/content/www/us/en/download/765501.html
 [2]:https://github.com/facebook/zstd/blob/dev/lib/zstd.h
