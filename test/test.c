@@ -48,7 +48,8 @@
 #include "zstd.h"
 #include "zstd_errors.h"
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
     char *inputFileName = NULL;
     int inputFile = -1;
     struct stat inputFileStat;
@@ -60,7 +61,7 @@ int main(int argc, char *argv[]) {
     unsigned long bytesRead = 0;
     size_t cSize = 0;
     size_t res = 0;
-    ZSTD_CCtx* const zc = ZSTD_createCCtx();
+    ZSTD_CCtx *const zc = ZSTD_createCCtx();
     QZSTD_startQatDevice();
     void *sequenceProducerState = QZSTD_createSeqProdState();
 
@@ -86,9 +87,9 @@ int main(int argc, char *argv[]) {
     lseek(inputFile, 0, SEEK_SET);
     dstBufferSize = ZSTD_compressBound(inputFileSize);
 
-    srcBuffer = (unsigned char*)malloc(inputFileSize);
+    srcBuffer = (unsigned char *)malloc(inputFileSize);
     assert(srcBuffer != NULL);
-    dstBuffer = (unsigned char*)malloc(dstBufferSize);
+    dstBuffer = (unsigned char *)malloc(dstBufferSize);
     assert(dstBuffer != NULL);
 
     bytesRead = read(inputFile, srcBuffer, inputFileSize);

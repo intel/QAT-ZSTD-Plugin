@@ -108,9 +108,11 @@
  */
 typedef struct QZSTD_Session_S {
     int instHint; /*which instance we last used*/
-    unsigned char *qatIntermediateBuf;  /* Buffer to store lz4s output for decoding */
+    unsigned char
+    *qatIntermediateBuf;  /* Buffer to store lz4s output for decoding */
     unsigned char reqPhyContMem; /* 1: QAT requires physically contiguous memory */
-    CpaDcSessionSetupData sessionSetupData; /* Session set up data for this session */
+    CpaDcSessionSetupData
+    sessionSetupData; /* Session set up data for this session */
     unsigned int failOffloadCnt; /* Failed offloading requests counter */
 } QZSTD_Session_T;
 
@@ -196,7 +198,7 @@ int debugLevel = DEBUGLEVEL;
                 QZSTD_DEBUG_PRINT(__FILE__ ": " __VA_ARGS__);   \
         }   }
 
-const char * QZSTD_version(void)
+const char *QZSTD_version(void)
 {
     return QZSTD_VERSION;
 }
@@ -207,7 +209,7 @@ const char * QZSTD_version(void)
  */
 static void *QZSTD_calloc(size_t nb, size_t size, unsigned char reqPhyContMem)
 {
-    if(!reqPhyContMem) {
+    if (!reqPhyContMem) {
         return calloc(nb, size);
     } else {
 #ifdef ENABLE_USDM_DRV
@@ -224,7 +226,7 @@ static void *QZSTD_calloc(size_t nb, size_t size, unsigned char reqPhyContMem)
  */
 static void QZSTD_free(void *ptr, unsigned char reqPhyContMem)
 {
-    if(!reqPhyContMem) {
+    if (!reqPhyContMem) {
         free(ptr);
     } else {
 #ifdef ENABLE_USDM_DRV
@@ -248,7 +250,7 @@ static __inline CpaPhysicalAddr QZSTD_virtToPhys(void *virtAddr)
 }
 
 static QZSTD_InstanceList_T *QZSTD_getInstance(unsigned int devId,
-                                              QZSTD_Hardware_T *qatHw)
+        QZSTD_Hardware_T *qatHw)
 {
     QZSTD_InstanceList_T *instances;
     QZSTD_InstanceList_T *firstInstance;
@@ -350,7 +352,7 @@ static void QZSTD_removeSession(int i)
         */
         do {
             rc = icp_sal_DcPollInstance(gProcess.dcInstHandle[i], 0);
-        } while(CPA_STATUS_SUCCESS == rc);
+        } while (CPA_STATUS_SUCCESS == rc);
         cpaDcRemoveSession(gProcess.dcInstHandle[i],
                            gProcess.qzstdInst[i].cpaSessHandle);
         QZSTD_free(gProcess.qzstdInst[i].cpaSessHandle, reqPhyContMem);
@@ -506,7 +508,8 @@ static int QZSTD_salUserStart(void)
     }
 
     if (0 == pcieCount) {
-        QZSTD_LOG(1, "There is no QAT device available, please check QAT device status\n");
+        QZSTD_LOG(1,
+                  "There is no QAT device available, please check QAT device status\n");
         return QZSTD_FAIL;
     }
 
@@ -532,9 +535,9 @@ static int QZSTD_getAndShuffleInstance(void)
     }
 
     gProcess.dcInstHandle = (CpaInstanceHandle *)calloc(
-        gProcess.numInstances, sizeof(CpaInstanceHandle));
+                                gProcess.numInstances, sizeof(CpaInstanceHandle));
     gProcess.qzstdInst = (QZSTD_Instance_T *)calloc(gProcess.numInstances,
-                                                     sizeof(QZSTD_Instance_T));
+                         sizeof(QZSTD_Instance_T));
     if (NULL == gProcess.dcInstHandle || NULL == gProcess.qzstdInst) {
         QZSTD_LOG(1, "calloc for qzstdInst failed\n");
         goto exit;
@@ -559,14 +562,14 @@ static int QZSTD_getAndShuffleInstance(void)
         }
 
         if (CPA_STATUS_SUCCESS != cpaDcInstanceGetInfo2(
-            gProcess.dcInstHandle[i], &newInst->instance.instanceInfo)) {
+                gProcess.dcInstHandle[i], &newInst->instance.instanceInfo)) {
             QZSTD_LOG(1, "cpaDcInstanceGetInfo2 failed\n");
             free(newInst);
             goto exit;
         }
 
         if (CPA_STATUS_SUCCESS != cpaDcQueryCapabilities(
-            gProcess.dcInstHandle[i], &newInst->instance.instanceCap)) {
+                gProcess.dcInstHandle[i], &newInst->instance.instanceCap)) {
             QZSTD_LOG(1, "cpaDcQueryCapabilities failed\n");
             free(newInst);
             goto exit;
@@ -617,7 +620,7 @@ static int QZSTD_getAndShuffleInstance(void)
 #endif
 
         memcpy(&gProcess.qzstdInst[instanceMatched], &newInst->instance,
-                    sizeof(QZSTD_Instance_T));
+               sizeof(QZSTD_Instance_T));
         gProcess.dcInstHandle[instanceMatched] = newInst->dcInstHandle;
         free(newInst);
         instanceMatched++;
@@ -691,14 +694,14 @@ static int QZSTD_allocInstMem(int i)
     }
 
     status = cpaDcGetNumIntermediateBuffers(
-        gProcess.dcInstHandle[i], &(gProcess.qzstdInst[i].intermediateCnt));
+                 gProcess.dcInstHandle[i], &(gProcess.qzstdInst[i].intermediateCnt));
     if (CPA_STATUS_SUCCESS != status) {
         QZSTD_LOG(1, "cpaDcGetNumIntermediateBuffers failed\n");
         goto cleanup;
     }
     gProcess.qzstdInst[i].intermediateBuffers =
         (CpaBufferList **)QZSTD_calloc((size_t)gProcess.qzstdInst[i].intermediateCnt,
-                                 sizeof(CpaBufferList *), 0);
+                                       sizeof(CpaBufferList *), 0);
     if (NULL == gProcess.qzstdInst[i].intermediateBuffers) {
         QZSTD_LOG(1, "Failed to allocate memory\n");
         goto cleanup;
@@ -820,8 +823,8 @@ static int QZSTD_startDcInstance(int i)
     }
 
     gProcess.qzstdInst[i].instStartStatus = cpaDcStartInstance(
-        gProcess.dcInstHandle[i], gProcess.qzstdInst[i].intermediateCnt,
-        gProcess.qzstdInst[i].intermediateBuffers);
+            gProcess.dcInstHandle[i], gProcess.qzstdInst[i].intermediateCnt,
+            gProcess.qzstdInst[i].intermediateBuffers);
     if (CPA_STATUS_SUCCESS != gProcess.qzstdInst[i].instStartStatus) {
         QZSTD_LOG(1, "cpaDcStartInstance failed\n");
         rc = QZSTD_FAIL;
@@ -844,20 +847,21 @@ static int QZSTD_cpaInitSess(QZSTD_Session_T *sess, int i)
 
     /*setup and start DC session*/
     if (CPA_STATUS_SUCCESS != cpaDcGetSessionSize(gProcess.dcInstHandle[i],
-                            &sess->sessionSetupData, &sessionSize, &ctxSize)) {
+            &sess->sessionSetupData, &sessionSize, &ctxSize)) {
         QZSTD_LOG(1, "cpaDcGetSessionSize failed\n");
         return QZSTD_FAIL;
     }
 
-    gProcess.qzstdInst[i].cpaSessHandle = QZSTD_calloc(1, (size_t)(sessionSize), reqPhyContMem);
+    gProcess.qzstdInst[i].cpaSessHandle = QZSTD_calloc(1, (size_t)(sessionSize),
+                                          reqPhyContMem);
     if (NULL == gProcess.qzstdInst[i].cpaSessHandle) {
         QZSTD_LOG(1, "Failed to allocate memory\n");
         return QZSTD_FAIL;
     }
 
     if (CPA_STATUS_SUCCESS != cpaDcInitSession(
-        gProcess.dcInstHandle[i], gProcess.qzstdInst[i].cpaSessHandle,
-        &sess->sessionSetupData, NULL, QZSTD_dcCallback)) {
+            gProcess.dcInstHandle[i], gProcess.qzstdInst[i].cpaSessHandle,
+            &sess->sessionSetupData, NULL, QZSTD_dcCallback)) {
         QZSTD_LOG(1, "cpaDcInitSession failed\n");
         QZSTD_free(gProcess.qzstdInst[i].cpaSessHandle, reqPhyContMem);
         gProcess.qzstdInst[i].cpaSessHandle = NULL;
@@ -877,7 +881,7 @@ static int QZSTD_cpaUpdateSess(QZSTD_Session_T *sess, int i)
 
     /* Remove session */
     if (CPA_STATUS_SUCCESS != cpaDcRemoveSession(
-        gProcess.dcInstHandle[i], gProcess.qzstdInst[i].cpaSessHandle)) {
+            gProcess.dcInstHandle[i], gProcess.qzstdInst[i].cpaSessHandle)) {
         QZSTD_LOG(1, "cpaDcRemoveSession failed\n");
         return QZSTD_FAIL;
     }
@@ -935,11 +939,13 @@ int QZSTD_startQatDevice(void)
     pthread_mutex_lock(&gProcess.mutex);
 
     if (QZSTD_FAIL == gProcess.qzstdInitStatus) {
-        gProcess.qzstdInitStatus = QZSTD_OK == QZSTD_salUserStart() ? QZSTD_STARTED : QZSTD_FAIL;
+        gProcess.qzstdInitStatus = QZSTD_OK == QZSTD_salUserStart() ? QZSTD_STARTED :
+                                   QZSTD_FAIL;
     }
 
     if (QZSTD_STARTED == gProcess.qzstdInitStatus) {
-        gProcess.qzstdInitStatus = QZSTD_OK == QZSTD_getAndShuffleInstance() ? QZSTD_OK : QZSTD_STARTED;
+        gProcess.qzstdInitStatus = QZSTD_OK == QZSTD_getAndShuffleInstance() ?
+                                   QZSTD_OK : QZSTD_STARTED;
     }
     QZSTD_LOG(2, "InitStatus: %d\n", gProcess.qzstdInitStatus);
     pthread_mutex_unlock(&gProcess.mutex);
@@ -974,9 +980,10 @@ static unsigned short readLE16(const void *memPtr)
 
 void *QZSTD_createSeqProdState(void)
 {
-    QZSTD_Session_T *zstdSess = (QZSTD_Session_T *)calloc(1, sizeof(QZSTD_Session_T));
+    QZSTD_Session_T *zstdSess = (QZSTD_Session_T *)calloc(1,
+                                sizeof(QZSTD_Session_T));
     QZSTD_setupSess(zstdSess);
-    return (void*)zstdSess;
+    return (void *)zstdSess;
 }
 
 void QZSTD_freeSeqProdState(void *sequenceProducerState)
@@ -991,7 +998,7 @@ void QZSTD_freeSeqProdState(void *sequenceProducerState)
 }
 
 static size_t QZSTD_decLz4s(ZSTD_Sequence *outSeqs, size_t outSeqsCapacity,
-    unsigned char *lz4sBuff, unsigned int lz4sBufSize)
+                            unsigned char *lz4sBuff, unsigned int lz4sBufSize)
 {
     unsigned char *ip = lz4sBuff;
     unsigned char *endip = lz4sBuff + lz4sBufSize;
@@ -999,7 +1006,7 @@ static size_t QZSTD_decLz4s(ZSTD_Sequence *outSeqs, size_t outSeqsCapacity,
 
     size_t seqsIdx = 0;
 
-     while (ip < endip && lz4sBufSize > 0) {
+    while (ip < endip && lz4sBufSize > 0) {
         size_t length = 0;
         size_t offset = 0;
         size_t literalLen = 0, matchlen = 0;
@@ -1009,8 +1016,8 @@ static size_t QZSTD_decLz4s(ZSTD_Sequence *outSeqs, size_t outSeqsCapacity,
             unsigned s;
             do {
                 s = *ip++;
-                 length += s;
-              } while (s == 255);
+                length += s;
+            } while (s == 255);
         }
         literalLen = length;
         ip += length;
@@ -1019,7 +1026,8 @@ static size_t QZSTD_decLz4s(ZSTD_Sequence *outSeqs, size_t outSeqsCapacity,
             outSeqs[seqsIdx].litLength = literalLen;
             outSeqs[seqsIdx].offset = offset;
             outSeqs[seqsIdx].matchLength = matchlen;
-            QZSTD_LOG(3, "Last sequence, literalLen: %lu, offset: %lu, matchlen: %lu\n", literalLen, offset, matchlen);
+            QZSTD_LOG(3, "Last sequence, literalLen: %lu, offset: %lu, matchlen: %lu\n",
+                      literalLen, offset, matchlen);
             break;
         }
 
@@ -1045,7 +1053,8 @@ static size_t QZSTD_decLz4s(ZSTD_Sequence *outSeqs, size_t outSeqsCapacity,
             outSeqs[seqsIdx].offset = offset;
             outSeqs[seqsIdx].litLength = literalLen;
             outSeqs[seqsIdx].matchLength = matchlen;
-            QZSTD_LOG(3, "sequence, literalLen: %lu, offset: %lu, matchlen: %lu\n", literalLen, offset, matchlen);
+            QZSTD_LOG(3, "sequence, literalLen: %lu, offset: %lu, matchlen: %lu\n",
+                      literalLen, offset, matchlen);
             histLiteralLen = 0;
             ++seqsIdx;
             assert(seqsIdx < (outSeqsCapacity - 1));
@@ -1062,21 +1071,23 @@ static size_t QZSTD_decLz4s(ZSTD_Sequence *outSeqs, size_t outSeqsCapacity,
     return ++seqsIdx;
 }
 
-static inline void QZSTD_castConstPointer(unsigned char **dest, const void **src)
+static inline void QZSTD_castConstPointer(unsigned char **dest,
+        const void **src)
 {
     memcpy(dest, src, sizeof(char *));
 }
 
-static inline int QZSTD_isTimeOut(struct timeval timeStart, struct timeval timeNow)
+static inline int QZSTD_isTimeOut(struct timeval timeStart,
+                                  struct timeval timeNow)
 {
     long long timeSpent = TIMESPENT(timeNow, timeStart);
     return timeSpent > MAXTIMEOUT ? 1 : 0;
 }
 
 size_t qatSequenceProducer(
-    void* sequenceProducerState, ZSTD_Sequence* outSeqs, size_t outSeqsCapacity,
-    const void* src, size_t srcSize,
-    const void* dict, size_t dictSize,
+    void *sequenceProducerState, ZSTD_Sequence *outSeqs, size_t outSeqsCapacity,
+    const void *src, size_t srcSize,
+    const void *dict, size_t dictSize,
     int compressionLevel,
     size_t windowSize)
 {
@@ -1089,8 +1100,11 @@ size_t qatSequenceProducer(
     struct timeval timeNow;
     QZSTD_Session_T *zstdSess = (QZSTD_Session_T *)sequenceProducerState;
 
-    if (windowSize < (srcSize < 32 * KB ? srcSize : 32 * KB) || dictSize > 0 || dict) {
-        QZSTD_LOG(2, "Currently not use windowsSize and not support dictionary, windowsSize: %lu, srcSize: %lu, dictSize: %lu\n", windowSize, srcSize, dictSize);
+    if (windowSize < (srcSize < 32 * KB ? srcSize : 32 * KB) || dictSize > 0 ||
+        dict) {
+        QZSTD_LOG(2,
+                  "Currently not use windowsSize and not support dictionary, windowsSize: %lu, srcSize: %lu, dictSize: %lu\n",
+                  windowSize, srcSize, dictSize);
         return ZSTD_SEQUENCE_PRODUCER_ERROR;
     }
 
@@ -1098,7 +1112,7 @@ size_t qatSequenceProducer(
     if (compressionLevel < COMP_LVL_MINIMUM ||
         compressionLevel > COMP_LVL_MAXIMUM) {
         QZSTD_LOG(1, "Only can offload L1-L12 to QAT, current compression level: %d\n"
-                    , compressionLevel);
+                  , compressionLevel);
         return ZSTD_SEQUENCE_PRODUCER_ERROR;
     }
 
@@ -1157,8 +1171,8 @@ size_t qatSequenceProducer(
 
     /* update cpaSessHandle if need */
     if (0 != memcmp(&zstdSess->sessionSetupData,
-        &gProcess.qzstdInst[i].sessionSetupData,
-        sizeof(CpaDcSessionSetupData))) {
+                    &gProcess.qzstdInst[i].sessionSetupData,
+                    sizeof(CpaDcSessionSetupData))) {
         if (QZSTD_OK != QZSTD_cpaUpdateSess(zstdSess, i)) {
             QZSTD_LOG(1, "Failed to update sess\n");
             rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
@@ -1169,8 +1183,8 @@ size_t qatSequenceProducer(
     /* Allocate intermediate buffer for storing lz4s format compressed by QAT */
     if (NULL == zstdSess->qatIntermediateBuf) {
         zstdSess->qatIntermediateBuf =
-        (unsigned char *)QZSTD_calloc(1, INTERMEDIATE_BUFFER_SZ,
-            zstdSess->reqPhyContMem);
+            (unsigned char *)QZSTD_calloc(1, INTERMEDIATE_BUFFER_SZ,
+                                          zstdSess->reqPhyContMem);
         if (NULL == zstdSess->qatIntermediateBuf) {
             QZSTD_LOG(1, "Failed to allocate memory");
             rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
@@ -1181,13 +1195,15 @@ size_t qatSequenceProducer(
     if (zstdSess->reqPhyContMem) {
         memcpy(gProcess.qzstdInst[i].srcBuffer->pBuffers->pData, src, srcSize);
     } else {
-        QZSTD_castConstPointer(&(gProcess.qzstdInst[i].srcBuffer->pBuffers->pData), &src);
+        QZSTD_castConstPointer(&(gProcess.qzstdInst[i].srcBuffer->pBuffers->pData),
+                               &src);
     }
     gProcess.qzstdInst[i].destBuffer->pBuffers->pData =
-            (Cpa8U *)zstdSess->qatIntermediateBuf;
+        (Cpa8U *)zstdSess->qatIntermediateBuf;
 
     gProcess.qzstdInst[i].srcBuffer->pBuffers->dataLenInBytes = srcSize;
-    gProcess.qzstdInst[i].destBuffer->pBuffers->dataLenInBytes = INTERMEDIATE_BUFFER_SZ;
+    gProcess.qzstdInst[i].destBuffer->pBuffers->dataLenInBytes =
+        INTERMEDIATE_BUFFER_SZ;
 
     memset(&opData, 0, sizeof(CpaDcOpData));
     opData.inputSkipData.skipMode = CPA_DC_SKIP_DISABLED;
@@ -1200,10 +1216,10 @@ size_t qatSequenceProducer(
     do {
         /* Submit request to QAT */
         qrc = cpaDcCompressData2(gProcess.dcInstHandle[i],
-                                gProcess.qzstdInst[i].cpaSessHandle,
-                                gProcess.qzstdInst[i].srcBuffer,
-                                gProcess.qzstdInst[i].destBuffer, &opData,
-                                &gProcess.qzstdInst[i].res, (void *)&gProcess.qzstdInst[i]);
+                                 gProcess.qzstdInst[i].cpaSessHandle,
+                                 gProcess.qzstdInst[i].srcBuffer,
+                                 gProcess.qzstdInst[i].destBuffer, &opData,
+                                 &gProcess.qzstdInst[i].res, (void *)&gProcess.qzstdInst[i]);
         retry_cnt--;
     } while (CPA_STATUS_RETRY == qrc && retry_cnt > 0);
 
@@ -1225,7 +1241,8 @@ size_t qatSequenceProducer(
             QZSTD_LOG(1, "Polling time out\n");
             break;
         }
-    } while(CPA_STATUS_RETRY == qrc || (CPA_STATUS_SUCCESS == qrc && gProcess.qzstdInst[i].seqNumIn != gProcess.qzstdInst[i].seqNumOut));
+    } while (CPA_STATUS_RETRY == qrc || (CPA_STATUS_SUCCESS == qrc &&
+                                         gProcess.qzstdInst[i].seqNumIn != gProcess.qzstdInst[i].seqNumOut));
 
     if (CPA_STATUS_FAIL == qrc) {
         gProcess.qzstdInst[i].seqNumOut++;
@@ -1241,7 +1258,7 @@ size_t qatSequenceProducer(
     }
     if (gProcess.qzstdInst[i].cbStatus == QZSTD_FAIL) {
         QZSTD_LOG(1, "Error in dc callback, cbStatus: %d\n",
-                    gProcess.qzstdInst[i].cbStatus);
+                  gProcess.qzstdInst[i].cbStatus);
         rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
         goto error;
     }
@@ -1250,14 +1267,19 @@ size_t qatSequenceProducer(
         gProcess.qzstdInst[i].res.produced == 0 ||
         gProcess.qzstdInst[i].res.produced > INTERMEDIATE_BUFFER_SZ ||
         CPA_STATUS_SUCCESS != gProcess.qzstdInst[i].res.status) {
-        QZSTD_LOG(1, "QAT result error, srcSize: %lu, consumed: %d, produced: %d, res.status:%d\n", srcSize, gProcess.qzstdInst[i].res.consumed, gProcess.qzstdInst[i].res.produced, gProcess.qzstdInst[i].res.status);
+        QZSTD_LOG(1,
+                  "QAT result error, srcSize: %lu, consumed: %d, produced: %d, res.status:%d\n",
+                  srcSize, gProcess.qzstdInst[i].res.consumed, gProcess.qzstdInst[i].res.produced,
+                  gProcess.qzstdInst[i].res.status);
         rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
         goto error;
     }
     QZSTD_LOG(2, "srcSize: %lu, consumed: %d, produced: %d\n",
-        srcSize, gProcess.qzstdInst[i].res.consumed, gProcess.qzstdInst[i].res.produced);
+              srcSize, gProcess.qzstdInst[i].res.consumed,
+              gProcess.qzstdInst[i].res.produced);
 
-    rc = QZSTD_decLz4s(outSeqs, outSeqsCapacity, zstdSess->qatIntermediateBuf, gProcess.qzstdInst[i].res.produced);
+    rc = QZSTD_decLz4s(outSeqs, outSeqsCapacity, zstdSess->qatIntermediateBuf,
+                       gProcess.qzstdInst[i].res.produced);
     assert(rc < (outSeqsCapacity - 1));
     QZSTD_LOG(2, "Produced %lu sequences\n", rc);
 
