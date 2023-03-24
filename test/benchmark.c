@@ -60,7 +60,7 @@
 
 
 #ifndef MIN
-    #define MIN(a,b) ((a)<(b)?(a):(b))
+#define MIN(a,b) ((a)<(b)?(a):(b))
 #endif
 
 #define DISPLAY(...)  fprintf(stderr, __VA_ARGS__)
@@ -76,7 +76,7 @@ typedef struct {
     unsigned nbIterations; /* Number test loops, default is 1 */
     char benchMode; /* 0: software compression, 1: QAT compression*/
     char searchForExternalRepcodes; /* 0: auto 1: enable, 2: disable */
-    const unsigned char* srcBuffer; /* Input data point */
+    const unsigned char *srcBuffer; /* Input data point */
 } threadArgs_t;
 
 typedef struct {
@@ -117,12 +117,12 @@ static void initHistorgram(HistogramStat_t *historgram)
 
 static int getBucketIndex(HistogramStat_t *historgram, size_t value)
 {
-    for (int bucketIndex = 0; bucketIndex < BUCKET_NUM; bucketIndex++){
+    for (int bucketIndex = 0; bucketIndex < BUCKET_NUM; bucketIndex++) {
         if (value < historgram->bucketValue[bucketIndex]) {
             return bucketIndex;
         }
     }
-    return BUCKET_NUM -1;
+    return BUCKET_NUM - 1;
 }
 
 static void bucketAdd(HistogramStat_t *historgram, size_t value)
@@ -166,7 +166,7 @@ static double percentile(HistogramStat_t *historgram, double p)
     return historgram->max;
 }
 
-static int usage(const char* exe)
+static int usage(const char *exe)
 {
     DISPLAY("Usage:\n");
     DISPLAY("      %s [arg] filename\n", exe);
@@ -187,10 +187,10 @@ static int usage(const char* exe)
  * if input string is "128K" and output will be 131072.
  * if input string is "65536" and output will be 65536.
  */
-static unsigned stringToU32(const char** s)
+static unsigned stringToU32(const char **s)
 {
     unsigned value = 0;
-    while ((**s >='0') && (**s <='9')) {
+    while ((**s >= '0') && (**s <= '9')) {
         if (value > ((((unsigned)(-1)) / 10) - 1)) {
             DISPLAY("ERROR: numeric value is too large\n");
             exit(1);
@@ -199,13 +199,13 @@ static unsigned stringToU32(const char** s)
         value += (unsigned)(**s - '0');
         (*s)++ ;
     }
-    if ((**s=='K') || (**s=='M')) {
+    if ((**s == 'K') || (**s == 'M')) {
         if (value > ((unsigned)(-1)) >> 10) {
             DISPLAY("ERROR: numeric value is too large\n");
             exit(1);
         }
         value <<= 10;
-        if (**s=='M') {
+        if (**s == 'M') {
             if (value > ((unsigned)(-1)) >> 10) {
                 DISPLAY("ERROR: numeric value is too large\n");
                 exit(1);
@@ -217,27 +217,27 @@ static unsigned stringToU32(const char** s)
     return value;
 }
 
-void* benchmark(void *args)
+void *benchmark(void *args)
 {
-    threadArgs_t* threadArgs = (threadArgs_t*)args;
+    threadArgs_t *threadArgs = (threadArgs_t *)args;
     size_t rc = 0, threadNum;
     unsigned loops;
     int verifyResult = 0; /* 1: pass, 0: fail */
-    size_t* chunkSizes = NULL; /* The array of chunk size */
-    size_t* compSizes = NULL; /* The array of compressed size */
+    size_t *chunkSizes = NULL; /* The array of chunk size */
+    size_t *compSizes = NULL; /* The array of compressed size */
     size_t nanosec = 0;
     size_t compNanosecSum = 0, decompNanosecSum = 0;
     double compSpeed = 0, decompSpeed = 0, ratio = 0;
     size_t csCount, nbChunk, destSize, cSize, dcSize;
     struct timespec startTicks, endTicks;
-    unsigned char* destBuffer = NULL, *decompBuffer = NULL;
-    const unsigned char* srcBuffer = threadArgs->srcBuffer;
+    unsigned char *destBuffer = NULL, *decompBuffer = NULL;
+    const unsigned char *srcBuffer = threadArgs->srcBuffer;
     size_t srcSize = threadArgs->srcSize;
     size_t chunkSize = threadArgs->chunkSize;
     unsigned nbIterations = threadArgs->nbIterations;
     unsigned cLevel = threadArgs->cLevel;
-    ZSTD_CCtx* const zc = ZSTD_createCCtx();
-    ZSTD_DCtx* const zdc = ZSTD_createDCtx();
+    ZSTD_CCtx *const zc = ZSTD_createCCtx();
+    ZSTD_DCtx *const zdc = ZSTD_createDCtx();
     void *matchState = NULL;
 
     csCount = srcSize / chunkSize + (srcSize % chunkSize ? 1 : 0);
@@ -251,8 +251,8 @@ void* benchmark(void *args)
     }
 
     destSize = ZSTD_compressBound(srcSize);
-    destBuffer = (unsigned char*)malloc(destSize);
-    decompBuffer = (unsigned char*)malloc(srcSize);
+    destBuffer = (unsigned char *)malloc(destSize);
+    decompBuffer = (unsigned char *)malloc(srcSize);
     assert(destBuffer != NULL);
 
     if (threadArgs->benchMode == 1) {
@@ -260,15 +260,17 @@ void* benchmark(void *args)
         matchState = QZSTD_createSeqProdState();
         ZSTD_registerSequenceProducer(zc, matchState, qatSequenceProducer);
     } else {
-	ZSTD_registerSequenceProducer(zc, NULL, NULL);
+        ZSTD_registerSequenceProducer(zc, NULL, NULL);
     }
 
     if (threadArgs->searchForExternalRepcodes == ZSTD_ENABLED) {
-	rc = ZSTD_CCtx_setParameter(zc, ZSTD_c_searchForExternalRepcodes, ZSTD_ps_enable);
+        rc = ZSTD_CCtx_setParameter(zc, ZSTD_c_searchForExternalRepcodes,
+                                    ZSTD_ps_enable);
     } else if (threadArgs->searchForExternalRepcodes == ZSTD_DISABLED) {
-	rc = ZSTD_CCtx_setParameter(zc, ZSTD_c_searchForExternalRepcodes, ZSTD_ps_disable);
+        rc = ZSTD_CCtx_setParameter(zc, ZSTD_c_searchForExternalRepcodes,
+                                    ZSTD_ps_disable);
     } else {
-	rc = ZSTD_CCtx_setParameter(zc, ZSTD_c_searchForExternalRepcodes, ZSTD_ps_auto);
+        rc = ZSTD_CCtx_setParameter(zc, ZSTD_c_searchForExternalRepcodes, ZSTD_ps_auto);
     }
     if (ZSTD_isError(rc)) {
         DISPLAY("Fail to set parameter ZSTD_c_searchForExternalRepcodes\n");
@@ -286,12 +288,13 @@ void* benchmark(void *args)
 
     /* Start compression benchmark */
     for (loops = 0; loops < nbIterations; loops++) {
-        unsigned char* tmpDestBuffer = destBuffer;
-        const unsigned char* tmpSrcBuffer = srcBuffer;
+        unsigned char *tmpDestBuffer = destBuffer;
+        const unsigned char *tmpSrcBuffer = srcBuffer;
         size_t tmpDestSize = destSize;
         for (nbChunk = 0; nbChunk < csCount; nbChunk++) {
             GETTIME(startTicks);
-            cSize = ZSTD_compress2(zc, tmpDestBuffer, tmpDestSize, tmpSrcBuffer, chunkSizes[nbChunk]);
+            cSize = ZSTD_compress2(zc, tmpDestBuffer, tmpDestSize, tmpSrcBuffer,
+                                   chunkSizes[nbChunk]);
             GETTIME(endTicks);
             if (ZSTD_isError(cSize)) {
                 DISPLAY("Compress failed\n");
@@ -326,14 +329,15 @@ void* benchmark(void *args)
     }
 
     pthread_barrier_wait(&g_threadBarrier2);
-     /* Start decompression benchmark */
+    /* Start decompression benchmark */
     for (loops = 0; loops < nbIterations; loops++) {
-        unsigned char* tmpDestBuffer = decompBuffer;
-        const unsigned char* tmpSrcBuffer = destBuffer;
+        unsigned char *tmpDestBuffer = decompBuffer;
+        const unsigned char *tmpSrcBuffer = destBuffer;
         size_t tmpDestSize = srcSize;
         for (nbChunk = 0; nbChunk < csCount; nbChunk++) {
             GETTIME(startTicks);
-            dcSize = ZSTD_decompressDCtx(zdc, tmpDestBuffer, tmpDestSize, tmpSrcBuffer, compSizes[nbChunk]);
+            dcSize = ZSTD_decompressDCtx(zdc, tmpDestBuffer, tmpDestSize, tmpSrcBuffer,
+                                         compSizes[nbChunk]);
             GETTIME(endTicks);
             if (ZSTD_isError(dcSize)) {
                 DISPLAY("Decompress failed\n");
@@ -351,11 +355,14 @@ void* benchmark(void *args)
     threadNum = __sync_add_and_fetch(&g_threadNum, 1);
 
     ratio = (double) cSize / (double)srcSize;
-    compSpeed = (double)(srcSize * nbIterations ) / ((double)compNanosecSum / NANOSEC);
-    decompSpeed = (double)(srcSize * nbIterations ) / ((double)decompNanosecSum / NANOSEC);
+    compSpeed = (double)(srcSize * nbIterations) / ((double)compNanosecSum /
+                NANOSEC);
+    decompSpeed = (double)(srcSize * nbIterations) / ((double)decompNanosecSum /
+                  NANOSEC);
     DISPLAY("Thread %lu: Compression: %lu -> %lu, Throughput: Comp: %5.f MB/s, Decomp: %5.f MB/s, Compression Ratio: %2.2f%%, %s\n",
-             threadNum, srcSize, cSize, (double) compSpeed/MB, (double) decompSpeed/MB, ratio * 100,
-             verifyResult ? "PASS" : "FAIL");
+            threadNum, srcSize, cSize, (double) compSpeed / MB, (double) decompSpeed / MB,
+            ratio * 100,
+            verifyResult ? "PASS" : "FAIL");
 exit:
     ZSTD_freeCCtx(zc);
     ZSTD_freeDCtx(zdc);
@@ -372,20 +379,20 @@ exit:
     if (destBuffer) {
         free(destBuffer);
     }
-    if(decompBuffer) {
+    if (decompBuffer) {
         free(decompBuffer);
     }
     return NULL;
 }
 
-int main(int argc, const char** argv)
+int main(int argc, const char **argv)
 {
     int argNb, threadNb;
     int nbThreads = 1;
     pthread_t threads[128];
     size_t srcSize, bytesRead;
-    unsigned char* srcBuffer = NULL;
-    const char* fileName = NULL;
+    unsigned char *srcBuffer = NULL;
+    const char *fileName = NULL;
     int inputFile = -1;
     threadArgs_t threadArgs;
 
@@ -400,16 +407,16 @@ int main(int argc, const char** argv)
     threadArgs.searchForExternalRepcodes = ZSTD_AUTO;
 
     for (argNb = 1; argNb < argc; argNb++) {
-        const char* arg = argv[argNb];
+        const char *arg = argv[argNb];
         if (arg[0] == '-') {
             arg++;
             while (arg[0] != 0) {
-                switch(arg[0])
-                {
-                    /* Display help message */
+                switch (arg[0]) {
+                /* Display help message */
                 case 'h':
-                case 'H': return usage(argv[0]);
-                    /* Set maximum threads */
+                case 'H':
+                    return usage(argv[0]);
+                /* Set maximum threads */
                 case 't':
                     arg++;
                     nbThreads = stringToU32(&arg);
@@ -418,39 +425,40 @@ int main(int argc, const char** argv)
                         return -1;
                     }
                     break;
-                    /* Set chunk size */
+                /* Set chunk size */
                 case 'c':
                     arg++;
                     threadArgs.chunkSize = stringToU32(&arg);
                     break;
-                    /* Set iterations */
+                /* Set iterations */
                 case 'l':
                     arg++;
                     threadArgs.nbIterations = stringToU32(&arg);
                     break;
-                    /* Set benchmark mode */
+                /* Set benchmark mode */
                 case 'm':
                     arg++;
                     threadArgs.benchMode = stringToU32(&arg);
                     break;
-                    /* Set searchForExternalRepcodes */
+                /* Set searchForExternalRepcodes */
                 case 'E':
                     arg++;
                     threadArgs.searchForExternalRepcodes = stringToU32(&arg);
-		    if (threadArgs.searchForExternalRepcodes != ZSTD_AUTO &&
+                    if (threadArgs.searchForExternalRepcodes != ZSTD_AUTO &&
                         threadArgs.searchForExternalRepcodes != ZSTD_ENABLED &&
                         threadArgs.searchForExternalRepcodes != ZSTD_DISABLED) {
                         DISPLAY("Invalid searchForExternalRepcodes parameter\n");
-			return usage(argv[0]);
-		    }
+                        return usage(argv[0]);
+                    }
                     break;
-                    /* Set compression level */
+                /* Set compression level */
                 case 'L':
                     arg++;
                     threadArgs.cLevel = stringToU32(&arg);
                     break;
-                    /* Unknown argument */
-                default : return usage(argv[0]);
+                /* Unknown argument */
+                default :
+                    return usage(argv[0]);
                 }
             }
             continue;
@@ -472,11 +480,11 @@ int main(int argc, const char** argv)
     }
     srcSize = lseek(inputFile, 0, SEEK_END);
     lseek(inputFile, 0, SEEK_SET);
-    srcBuffer = (unsigned char*)malloc(srcSize);
+    srcBuffer = (unsigned char *)malloc(srcSize);
     assert(srcBuffer != NULL);
 
     bytesRead = 0;
-    while(bytesRead != srcSize) {
+    while (bytesRead != srcSize) {
         bytesRead += read(inputFile, srcBuffer + bytesRead, srcSize - bytesRead);
     }
     assert(bytesRead == srcSize);
@@ -487,11 +495,11 @@ int main(int argc, const char** argv)
 
     pthread_barrier_init(&g_threadBarrier1, NULL, nbThreads);
     pthread_barrier_init(&g_threadBarrier2, NULL, nbThreads);
-    for(threadNb = 0; threadNb < nbThreads; threadNb++){
+    for (threadNb = 0; threadNb < nbThreads; threadNb++) {
         pthread_create(&threads[threadNb], NULL, benchmark, &threadArgs);
     }
 
-    for(threadNb = 0; threadNb < nbThreads; threadNb++){
+    for (threadNb = 0; threadNb < nbThreads; threadNb++) {
         pthread_join(threads[threadNb], NULL);
     }
 
@@ -499,23 +507,23 @@ int main(int argc, const char** argv)
         /* Display Latency statistics */
         DISPLAY("-----------------------------------------------------------\n");
         DISPLAY("Latency Percentiles: P25: %4.2f us, P50: %4.2f us, P75: %4.2f us, P99: %4.2f us, Avg: %4.2f us\n",
-                 percentile(&compHistogram, 25)/NANOUSEC,
-                 percentile(&compHistogram, 50)/NANOUSEC,
-                 percentile(&compHistogram, 75)/NANOUSEC,
-                 percentile(&compHistogram, 99)/NANOUSEC,
-                (double)(compHistogram.sum/compHistogram.num/NANOUSEC));
+                percentile(&compHistogram, 25) / NANOUSEC,
+                percentile(&compHistogram, 50) / NANOUSEC,
+                percentile(&compHistogram, 75) / NANOUSEC,
+                percentile(&compHistogram, 99) / NANOUSEC,
+                (double)(compHistogram.sum / compHistogram.num / NANOUSEC));
 
 #ifdef DISPLAY_HISTOGRAM
         DISPLAY("Latency histogram(nanosec): count: %lu\n", compHistogram.num);
         size_t cumulativeSum = 0;
-        for(int i = 0; i < compHistogram.bucketCount; i++) {
-            if(compHistogram.bucket[i] != 0) {
+        for (int i = 0; i < compHistogram.bucketCount; i++) {
+            if (compHistogram.bucket[i] != 0) {
                 cumulativeSum += compHistogram.bucket[i];
                 DISPLAY("[%10lu, %10lu] %10lu %7.2f%% %7.2f%%\n",
-                i == 0 ? 0 : compHistogram.bucketValue[i - 1], compHistogram.bucketValue[i],
-                compHistogram.bucket[i],
-                (double)compHistogram.bucket[i] * 100 / compHistogram.num,
-                (double)cumulativeSum * 100 / compHistogram.num);
+                        i == 0 ? 0 : compHistogram.bucketValue[i - 1], compHistogram.bucketValue[i],
+                        compHistogram.bucket[i],
+                        (double)compHistogram.bucket[i] * 100 / compHistogram.num,
+                        (double)cumulativeSum * 100 / compHistogram.num);
             }
         }
 #endif

@@ -66,7 +66,7 @@ typedef enum {
  *
  * @retval const char*  Version string.
  */
-const char * QZSTD_version(void);
+const char *QZSTD_version(void);
 
 /** qatSequenceProducer:
  *    Block-level sequence producer with QAT
@@ -105,9 +105,9 @@ const char * QZSTD_version(void);
  *    Multi-threading across compressions is fine: simply create one CCtx per thread.
  */
 size_t qatSequenceProducer(
-    void* sequenceProducerState, ZSTD_Sequence* outSeqs, size_t outSeqsCapacity,
-    const void* src, size_t srcSize,
-    const void* dict, size_t dictSize,
+    void *sequenceProducerState, ZSTD_Sequence *outSeqs, size_t outSeqsCapacity,
+    const void *src, size_t srcSize,
+    const void *dict, size_t dictSize,
     int compressionLevel,
     size_t windowSize
 );
