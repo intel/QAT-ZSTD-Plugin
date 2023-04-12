@@ -403,7 +403,7 @@ int main(int argc, const char **argv)
 {
     int argNb, threadNb;
     int nbThreads = 1;
-    pthread_t threads[128];
+    pthread_t threads[2048];
     size_t srcSize, bytesRead;
     unsigned char *srcBuffer = NULL;
     const char *fileName = NULL;
@@ -434,8 +434,8 @@ int main(int argc, const char **argv)
                 case 't':
                     arg++;
                     nbThreads = stringToU32(&arg);
-                    if (nbThreads > 128) {
-                        DISPLAY("Invalid thread parameter, maximum is 128\n");
+                    if (nbThreads > 2048) {
+                        DISPLAY("Invalid thread parameter, maximum is 2048\n");
                         return -1;
                     }
                     break;
