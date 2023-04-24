@@ -34,7 +34,13 @@
 # #######################################################################
 LIB     = ../src
 
-LDFLAGS += -lqat_s -lusdm_drv_s $(LIB)/libqatseqprod.a -I$(LIB)
+LDFLAGS = $(LIB)/libqatseqprod.a -I$(LIB)
+
+ifneq ($(ICP_ROOT), )
+	LDFLAGS += -lqat_s -lusdm_drv_s -Wl,-rpath,$(ICP_ROOT)/build -L$(ICP_ROOT)/build
+else
+	LDFLAGS += -lqat -lusdm
+endif
 
 ifdef ZSTDLIB
 LDFLAGS += $(ZSTDLIB)/libzstd.a -I$(ZSTDLIB)

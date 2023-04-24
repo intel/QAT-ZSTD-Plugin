@@ -34,7 +34,7 @@ Intel® 4xxx (Intel® QuickAssist Technology Gen 4)
 
 ZSTD* library of version 1.5.4+
 
-[Intel® QAT Driver for Linux* Hardware v2.0][2]
+[Intel® QAT Driver for Linux* Hardware v2.0][2] or [Intel® QuickAssist Technology Library (QATlib)][3] of version 22.07.0+
 
 ## Limitations
 
@@ -45,17 +45,25 @@ ZSTD* library of version 1.5.4+
  5. Stream history is not currently supported. All advanced ZSTD* compression APIs, including streaming APIs, work with QAT sequence producer, but each block is treated as an independent chunk without history from previous blocks.
  6. Multi-threading within a single compression is not currently supported. In other words, compression will fail if `ZSTD_c_nbWorkers` > 0 and an external sequence producer is registered. Multi-threading across compressions is fine: simply create one CCtx per thread.
 
-For more details about ZSTD* sequence producer, please refer to [zstd.h][3].
+For more details about ZSTD* sequence producer, please refer to [zstd.h][4].
 
 ## Installation Instructions
 
 ### Build and install Intel® QuickAssist Technology Driver
 
-Download from [Intel® QAT Driver for Linux* Hardware v2.0][2], follow the guidance: [Intel® QuickAssist Technology Software for Linux* - Getting Started Guide][4].
+Users can choose [Intel® QAT Driver for Linux* Hardware v2.0][2](out-of-tree) or [Intel® QuickAssist Technology Library (QATlib)][3](in-tree) according to their requirements.
 
-If installing the Intel® QAT 2.0 driver for use in a virtual environment, please refer to [Using Intel® Virtualization Technology (Intel® VT) with Intel® QuickAssist Technology][5]
+If using out-of-tree driver, the user needs to set `ICP_ROOT` environment variable:
 
-After installing the QAT driver, please refer to [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide][6] to the update QAT configuration file according to requirements.
+`ICP_ROOT`: the root directory of the QAT driver source tree
+
+#### Build and install Intel® QAT Driver for Linux* Hardware v2.0
+
+Download from [Intel® QAT Driver for Linux* Hardware v2.0][2], follow the guidance: [Intel® QuickAssist Technology Software for Linux* - Getting Started Guide][5].
+
+If installing the Intel® QAT 2.0 driver for use in a virtual environment, please refer to [Using Intel® Virtualization Technology (Intel® VT) with Intel® QuickAssist Technology][6]
+
+After installing the QAT driver, please refer to [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide][7] to the update QAT configuration file according to requirements.
 
 QAT ZSTD Plugin needs a [SHIM] section by default.
 There are two ways to change:
@@ -68,17 +76,17 @@ After updating the configuration files, please restart QAT.
     service qat_service restart
 ```
 
+#### Install QATlib
+
+QATlib has been upstream to some platforms, RedHat, SUSE. Users also can install QATlib from source code according to [qatlib/INSTALL][8].
+
 ### Build QAT sequence producer library
 
 Shared Virtual Memory (SVM) allows direct submission of an applications buffer, thus removing the memcpy cycle cost, cache thrashing, and memory bandwidth. The SVM feature enables passing virtual addresses to the QAT hardware for processing acceleration requests.
 
 QAT sequence producer library runs on the SVM environment by default.
 
-To enable SVM, please refer to [Using Intel® Virtualization Technology (Intel® VT) with Intel® QuickAssist Technology][5] to update the BIOS and [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide][6] chapter 3.3 to update driver configuration.
-
-Set `ICP_ROOT` environment variable:
-
-`ICP_ROOT`: the root directory of the QAT driver source tree
+To enable SVM, please refer to [Using Intel® Virtualization Technology (Intel® VT) with Intel® QuickAssist Technology][6] to update the BIOS and [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide][7] chapter 3.3 to update driver configuration.
 
 ```bash
     make
@@ -94,7 +102,7 @@ If ZSTD* 1.5.4 library is not installed, need to specify path to ZSTD* lib sourc
 
 If SVM is not enabled, memory passed to Intel® QuickAssist Technology hardware must be DMA’able.
 
-Intel provides a User Space DMA-able Memory (USDM) component (kernel driver and corresponding user space library) which allocates/frees DMA-able memory, mapped to user space, performs virtual to physical address translation on memory allocated by this library. Please refer to [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide][6] chapter 3.3.
+Intel provides a User Space DMA-able Memory (USDM) component (kernel driver and corresponding user space library) which allocates/frees DMA-able memory, mapped to user space, performs virtual to physical address translation on memory allocated by this library. Please refer to [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide][7] chapter 3.3.
 
 To enable USDM, please compile with "ENABLE_USDM_DRV=1".
 
@@ -178,7 +186,9 @@ Intel, the Intel logo are trademarks of Intel Corporation in the U.S. and/or oth
 
 [1]:https://github.com/facebook/zstd/releases/tag/v1.5.4
 [2]:https://www.intel.com/content/www/us/en/download/765501.html
-[3]:https://github.com/facebook/zstd/blob/dev/lib/zstd.h
-[4]:https://www.intel.com/content/www/us/en/content-details/632506/intel-quickassist-technology-intel-qat-software-for-linux-getting-started-guide-hardware-version-2-0.html
-[5]:https://www.intel.com/content/www/us/en/content-details/709210/using-intel-virtualization-technology-intel-vt-with-intel-quickassist-technology-application-note.html
-[6]:https://www.intel.com/content/www/us/en/content-details/743912/intel-quickassist-technology-intel-qat-software-for-linux-programmers-guide-hardware-version-2-0.html
+[3]:https://github.com/intel/qatlib
+[4]:https://github.com/facebook/zstd/blob/dev/lib/zstd.h
+[5]:https://www.intel.com/content/www/us/en/content-details/632506/intel-quickassist-technology-intel-qat-software-for-linux-getting-started-guide-hardware-version-2-0.html
+[6]:https://www.intel.com/content/www/us/en/content-details/709210/using-intel-virtualization-technology-intel-vt-with-intel-quickassist-technology-application-note.html
+[7]:https://www.intel.com/content/www/us/en/content-details/743912/intel-quickassist-technology-intel-qat-software-for-linux-programmers-guide-hardware-version-2-0.html
+[8]:https://github.com/intel/qatlib/blob/main/INSTALL

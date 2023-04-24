@@ -42,20 +42,26 @@ INCLUDEDIR ?= $(INSTALLDIR)/include
 
 CP ?= cp
 
-QATFLAGS = -I$(ICP_ROOT)/quickassist/include	\
-		   -I$(ICP_ROOT)/quickassist/include/dc	\
-		   -I$(ICP_ROOT)/quickassist/lookaside/access_layer/include
+ifneq ($(ICP_ROOT), )
+	QATFLAGS = -I$(ICP_ROOT)/quickassist/include	\
+		   	   -I$(ICP_ROOT)/quickassist/include/dc	\
+		       -I$(ICP_ROOT)/quickassist/lookaside/access_layer/include
+	LDFLAGS  = -Wl,-rpath,$(ICP_ROOT)/build -L$(ICP_ROOT)/build -lqat_s
+	ifneq ($(ENABLE_USDM_DRV), 0)
+		QATFLAGS += -I$(ICP_ROOT)/quickassist/utilities/libusdm_drv -DENABLE_USDM_DRV
+		LDFLAGS  += -lusdm_drv_s
+	endif
+else
+	QATFLAGS = -DINTREE
+	LDFLAGS  = -lqat
+	ifneq ($(ENABLE_USDM_DRV), 0)
+		QATFLAGS += -DENABLE_USDM_DRV
+		LDFLAGS	 += -lusdm
+	endif
+endif
 
 ifdef ZSTDLIB
 CFLAGS   += -I$(ZSTDLIB)
-endif
-
-LDFLAGS  = -L$(ICP_ROOT)/build -lqat_s
-
-ENABLE_USDM_DRV ?= 0
-ifneq ($(ENABLE_USDM_DRV), 0)
-  	QATFLAGS += -I$(ICP_ROOT)/quickassist/utilities/libusdm_drv -DENABLE_USDM_DRV
-  	LDFLAGS  += -lusdm_drv_s
 endif
 
 CFLAGS += -Wall -Werror -Wextra -Wcast-align -Wshadow -Wstrict-aliasing=1 \
