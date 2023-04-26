@@ -57,6 +57,7 @@ test: test.c
 	$(CC) $^ $(LDFLAGS) -o $@
 
 benchmark: benchmark.c
+	$(Q)$(MAKE) -C $(LIB)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@ -lpthread
 
 clean:

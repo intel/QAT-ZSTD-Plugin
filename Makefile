@@ -47,6 +47,10 @@ lib:
 test:
 	$(Q)$(MAKE) -C $(TESTDIR) $@
 
+.PHONY: benchmark
+benchmark:
+	$(Q)$(MAKE) -C $(TESTDIR) $@
+
 .PHONY: install
 install:
 	$(Q)$(MAKE) -C $(LIBDIR) $@
