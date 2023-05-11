@@ -239,9 +239,11 @@ static void QZSTD_free(void *ptr, unsigned char reqPhyContMem)
 {
     if (!reqPhyContMem) {
         free(ptr);
+        ptr = NULL;
     } else {
 #ifdef ENABLE_USDM_DRV
         qaeMemFreeNUMA(&ptr);
+        ptr = NULL;
 #else
         QZSTD_LOG(1, "Don't support QAT USDM driver\n");
 #endif
@@ -309,6 +311,7 @@ static void QZSTD_clearDevices(QZSTD_Hardware_T *qatHw)
         QZSTD_InstanceList_T *inst = QZSTD_getInstance(i, qatHw);
         while (inst) {
             free(inst);
+            inst = NULL;
             inst = QZSTD_getInstance(i, qatHw);
         }
     }
@@ -584,6 +587,7 @@ static int QZSTD_getAndShuffleInstance(void)
                 gProcess.dcInstHandle[i], &newInst->instance.instanceInfo)) {
             QZSTD_LOG(1, "cpaDcInstanceGetInfo2 failed\n");
             free(newInst);
+            newInst = NULL;
             goto exit;
         }
 
@@ -591,6 +595,7 @@ static int QZSTD_getAndShuffleInstance(void)
                 gProcess.dcInstHandle[i], &newInst->instance.instanceCap)) {
             QZSTD_LOG(1, "cpaDcQueryCapabilities failed\n");
             free(newInst);
+            newInst = NULL;
             goto exit;
         }
 
@@ -605,6 +610,7 @@ static int QZSTD_getAndShuffleInstance(void)
         if (QZSTD_OK != QZSTD_setInstance(devId, newInst, qatHw)) {
             QZSTD_LOG(1, "QZSTD_setInstance on device %d failed\n", devId);
             free(newInst);
+            newInst = NULL;
             goto exit;
         }
     }
@@ -622,6 +628,7 @@ static int QZSTD_getAndShuffleInstance(void)
         if (!newInst->instance.instanceCap.checksumXXHash32 ||
             !newInst->instance.instanceCap.statelessLZ4SCompression) {
             free(newInst);
+            newInst = NULL;
             continue;
         }
 
@@ -633,6 +640,7 @@ static int QZSTD_getAndShuffleInstance(void)
 #else
         if (newInst->instance.instanceInfo.requiresPhysicallyContiguousMemory) {
             free(newInst);
+            newInst = NULL;
             continue;
         }
         newInst->instance.reqPhyContMem = 0;
@@ -642,6 +650,7 @@ static int QZSTD_getAndShuffleInstance(void)
                sizeof(QZSTD_Instance_T));
         gProcess.dcInstHandle[instanceMatched] = newInst->dcInstHandle;
         free(newInst);
+        newInst = NULL;
         instanceMatched++;
     }
 
@@ -652,6 +661,7 @@ static int QZSTD_getAndShuffleInstance(void)
 
     QZSTD_clearDevices(qatHw);
     free(qatHw);
+    qatHw = NULL;
 
     return QZSTD_OK;
 
@@ -659,6 +669,7 @@ exit:
     if (qatHw) {
         QZSTD_clearDevices(qatHw);
         free(qatHw);
+        qatHw = NULL;
     }
     if (NULL != gProcess.dcInstHandle) {
         free(gProcess.dcInstHandle);
@@ -906,6 +917,7 @@ static int QZSTD_cpaUpdateSess(QZSTD_Session_T *sess, int i)
     }
 
     QZSTD_free(gProcess.qzstdInst[i].cpaSessHandle, reqPhyContMem);
+    gProcess.qzstdInst[i].cpaSessHandle = NULL;
 
     return QZSTD_cpaInitSess(sess, i);
 }
@@ -1011,8 +1023,10 @@ void QZSTD_freeSeqProdState(void *sequenceProducerState)
     if (zstdSess) {
         if (zstdSess->qatIntermediateBuf) {
             QZSTD_free(zstdSess->qatIntermediateBuf, zstdSess->reqPhyContMem);
+            zstdSess->qatIntermediateBuf = NULL;
         }
         free(zstdSess);
+        zstdSess = NULL;
     }
 }
 
