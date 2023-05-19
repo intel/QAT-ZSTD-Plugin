@@ -42,6 +42,7 @@ INCLUDEDIR ?= $(INSTALLDIR)/include
 
 CP ?= cp
 
+ENABLE_USDM_DRV ?= 0
 ifneq ($(ICP_ROOT), )
 	QATFLAGS = -I$(ICP_ROOT)/quickassist/include	\
 		   	   -I$(ICP_ROOT)/quickassist/include/dc	\
