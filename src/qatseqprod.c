@@ -100,8 +100,8 @@
 #define COMPRESS_SRC_BUFF_SZ (ZSTD_BLOCKSIZE_MAX)
 #define DC_CEIL_DIV(x, y) (((x) + (y)-1) / (y))
 /* Formula for GEN4 LZ4S:
-* sourceLen + Ceil(sourceLen/2000) * 11 + 1024 */
-#define INTERMEDIATE_BUFFER_SZ (ZSTD_BLOCKSIZE_MAX + 1024 + DC_CEIL_DIV(ZSTD_BLOCKSIZE_MAX, 2000) * 11)
+* sourceLen + Ceil(sourceLen/18) * 1 + 1024 */
+#define INTERMEDIATE_BUFFER_SZ (ZSTD_BLOCKSIZE_MAX + 1024 + DC_CEIL_DIV(ZSTD_BLOCKSIZE_MAX, 18))
 
 #define ML_BITS 4
 #define ML_MASK ((1U << ML_BITS) - 1)
