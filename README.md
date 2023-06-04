@@ -119,9 +119,100 @@ To enable USDM, please compile with "ENABLE_USDM_DRV=1".
 
 ### Build and run benchmark tool
 
+If SVM is not enabled, please compile with "ENABLE_USDM_DRV=1".
+
 ```bash
-    make benchmark
-    ./test/benchmark [TEST FILENAME]
+    make benchmark ENABLE_USDM_DRV=1
+```
+
+The `benchmark` is a tool used to perform QAT sequence producer performance tests, it supports the following options:
+
+```bash
+    -t#       Set maximum threads [1 - 128] (default: 1)
+    -l#       Set iteration loops [1 - 1000000](default: 1)
+    -c#       Set chunk size (default: 32K)
+    -E#       Auto/enable/disable searchForExternalRepcodes(0: auto; 1: enable; 2: disable; default: auto)
+    -L#       Set compression level [1 - 12] (default: 1)
+    -m#       Benchmark mode, 0: software compression; 1:QAT compression(default: 1)
+```
+
+In order to get a better performance, increasing the number of threads with `-t` is a better way. The number of dc instances provided by Intel® QAT needs to be increased while increasing test threads, it can be increased by modifying the `NumberDcInstances` in `/etc/4xxx_devx.conf`. Note that the test threads number should not exceed the number of dc instances, as this ensures that each test thread can obtain a dc instance.
+For more Intel® QAT configuration information, please refer to [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide][7] chapter 5.
+An example usage of benchmark tool with [Silesia compression corpus][9]:
+
+```bash
+   ./benchmark -m1 -l100 -c64K -t64 -E2 Silesia
+```
+
+which used the following Intel® QAT configuration file:
+
+```bash
+    # QAT configuration file /etc/4xxx_devx.conf
+    ##############################################
+    # User Process Instance Section
+    ##############################################
+    [SHIM]
+    NumberCyInstances = 0
+    NumberDcInstances = 64
+    NumProcesses = 1
+    LimitDevAccess = 0
+
+    # Data Compression - User instance #0
+    Dc1Name = "Dc0"
+    Dc1IsPolled = 1
+    # List of core affinities
+    Dc1CoreAffinity = 0
+
+    # Data Compression - User instance #1
+    Dc2Name = "Dc1"
+    Dc2IsPolled = 1
+    # List of core affinities
+    Dc2CoreAffinity = 1
+    ...
+    # Data Compression - User instance #63
+    Dc63Name = "Dc63"
+    Dc63IsPolled = 1
+    # List of core affinities
+    Dc63CoreAffinity = 63
+```
+
+### How to integrate QAT sequence producer into `zstd`
+Integrating QAT sequence producer into the `zstd` command can speed up its compression, The following sample code shows how to enable QAT sequence producer by modifying the code of `FIO_compressZstdFrame` in `zstd/programs/fileio.c`.
+
+Start QAT device and register qatSequenceProducer before starting compression job.
+
+```c
+    /* Start QAT device, start QAT device at any
+    time before compression job started */
+    QZSTD_startQatDevice();
+    /* Create sequence producer state for QAT sequence producer */
+    void *sequenceProducerState = QZSTD_createSeqProdState();
+    /* register qatSequenceProducer */
+    ZSTD_registerSequenceProducer(
+        ress.cctx,
+        sequenceProducerState,
+        qatSequenceProducer
+    );
+    /* Enable sequence producer fallback */
+    ZSTD_CCtx_setParameter(ress.cctx,, ZSTD_c_enableSeqProducerFallback, 1);
+```
+
+Stop QAT device after compression job
+
+```c
+    /* Free sequence producer state */
+    QZSTD_freeSeqProdState(sequenceProducerState);
+    /* Please call QZSTD_stopQatDevice before
+    QAT is no longer used or the process exits */
+    QZSTD_stopQatDevice();
+```
+
+Then recompile `zstd` with flag `-lqatseqprod`. Currently, only single-threaded mode compression is supported to using QAT sequence producer, please run `zstd` with the `--single-thread`.
+
+Note : some parameters of `zstd` do not support sequence producer, for more zstd usage information please refer to [zstd manual][10].
+
+```bash
+    ./zstd --single-thread [TEST FILENAME]
 ```
 
 ### How to integrate QAT sequence producer into applications
@@ -192,3 +283,5 @@ Intel, the Intel logo are trademarks of Intel Corporation in the U.S. and/or oth
 [6]:https://www.intel.com/content/www/us/en/content-details/709210/using-intel-virtualization-technology-intel-vt-with-intel-quickassist-technology-application-note.html
 [7]:https://www.intel.com/content/www/us/en/content-details/743912/intel-quickassist-technology-intel-qat-software-for-linux-programmers-guide-hardware-version-2-0.html
 [8]:https://github.com/intel/qatlib/blob/main/INSTALL
+[9]:https://sun.aei.polsl.pl//~sdeor/index.php?page=silesia
+[10]:https://github.com/facebook/zstd/blob/dev/doc/zstd_manual.html
