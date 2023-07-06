@@ -497,7 +497,7 @@ static int QZSTD_setInstance(unsigned int devId,
     return QZSTD_OK;
 }
 
-const char *getSectionName(void)
+const char *QZSTD_getSectionName(void)
 {
     static char sectionName[SECTION_NAME_SIZE];
     int len;
@@ -537,7 +537,7 @@ static int QZSTD_salUserStart(void)
     }
 #endif
 
-    if (CPA_STATUS_SUCCESS != icp_sal_userStart(getSectionName())) {
+    if (CPA_STATUS_SUCCESS != icp_sal_userStart(QZSTD_getSectionName())) {
         QZSTD_LOG(1, "icp_sal_userStart failed\n");
         return QZSTD_FAIL;
     }
