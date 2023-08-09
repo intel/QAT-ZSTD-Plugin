@@ -98,10 +98,6 @@
 
 #define INTER_SZ(src_sz) (2 * (src_sz))
 #define COMPRESS_SRC_BUFF_SZ (ZSTD_BLOCKSIZE_MAX)
-#define DC_CEIL_DIV(x, y) (((x) + (y)-1) / (y))
-/* Formula for GEN4 LZ4S:
-* sourceLen + Ceil(sourceLen/18) * 1 + 1024 */
-#define INTERMEDIATE_BUFFER_SZ (ZSTD_BLOCKSIZE_MAX + 1024 + DC_CEIL_DIV(ZSTD_BLOCKSIZE_MAX, 18))
 
 #define ML_BITS 4
 #define ML_MASK ((1U << ML_BITS) - 1)
@@ -1134,6 +1130,7 @@ size_t qatSequenceProducer(
     struct timeval timeStart;
     struct timeval timeNow;
     QZSTD_Session_T *zstdSess = (QZSTD_Session_T *)sequenceProducerState;
+    Cpa32U intermediateBufLen = 0;
 
     if (windowSize < (srcSize < 32 * KB ? srcSize : 32 * KB) || dictSize > 0 ||
         dict) {
@@ -1215,10 +1212,17 @@ size_t qatSequenceProducer(
         }
     }
 
+    if (CPA_STATUS_SUCCESS != cpaDcLZ4SCompressBound(gProcess.dcInstHandle[i],
+            ZSTD_BLOCKSIZE_MAX, &intermediateBufLen)) {
+        QZSTD_LOG(1, "Failed to caculate compress bound\n");
+        rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
+        goto exit;
+    }
+
     /* Allocate intermediate buffer for storing lz4s format compressed by QAT */
     if (NULL == zstdSess->qatIntermediateBuf) {
         zstdSess->qatIntermediateBuf =
-            (unsigned char *)QZSTD_calloc(1, INTERMEDIATE_BUFFER_SZ,
+            (unsigned char *)QZSTD_calloc(1, intermediateBufLen,
                                           zstdSess->reqPhyContMem);
         if (NULL == zstdSess->qatIntermediateBuf) {
             QZSTD_LOG(1, "Failed to allocate memory");
@@ -1238,7 +1242,7 @@ size_t qatSequenceProducer(
 
     gProcess.qzstdInst[i].srcBuffer->pBuffers->dataLenInBytes = srcSize;
     gProcess.qzstdInst[i].destBuffer->pBuffers->dataLenInBytes =
-        INTERMEDIATE_BUFFER_SZ;
+        intermediateBufLen;
 
     memset(&opData, 0, sizeof(CpaDcOpData));
     opData.inputSkipData.skipMode = CPA_DC_SKIP_DISABLED;
@@ -1300,7 +1304,7 @@ size_t qatSequenceProducer(
 
     if (gProcess.qzstdInst[i].res.consumed < srcSize ||
         gProcess.qzstdInst[i].res.produced == 0 ||
-        gProcess.qzstdInst[i].res.produced > INTERMEDIATE_BUFFER_SZ ||
+        gProcess.qzstdInst[i].res.produced > intermediateBufLen ||
         CPA_STATUS_SUCCESS != gProcess.qzstdInst[i].res.status) {
         QZSTD_LOG(1,
                   "QAT result error, srcSize: %lu, consumed: %d, produced: %d, res.status:%d\n",
