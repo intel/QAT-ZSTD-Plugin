@@ -44,7 +44,9 @@
 #include <pthread.h>
 #include <unistd.h>
 
+#ifndef ZSTD_STATIC_LINKING_ONLY
 #define ZSTD_STATIC_LINKING_ONLY
+#endif
 #include "zstd.h"
 #include "zstd_errors.h"
 #include "qatseqprod.h"
@@ -239,6 +241,7 @@ void *benchmark(void *args)
     ZSTD_CCtx *const zc = ZSTD_createCCtx();
     ZSTD_DCtx *const zdc = ZSTD_createDCtx();
     void *matchState = NULL;
+    int setUpStatus = 0, compressStatus = 0;
 
     csCount = srcSize / chunkSize + (srcSize % chunkSize ? 1 : 0);
     chunkSizes = (size_t *)malloc(csCount * sizeof(size_t));
@@ -274,17 +277,24 @@ void *benchmark(void *args)
     }
     if (ZSTD_isError(rc)) {
         DISPLAY("Fail to set parameter ZSTD_c_searchForExternalRepcodes\n");
-        goto exit;
+        goto setupend;
     }
 
     rc = ZSTD_CCtx_setParameter(zc, ZSTD_c_compressionLevel, cLevel);
     if (ZSTD_isError(rc)) {
         DISPLAY("Fail to set parameter ZSTD_c_compressionLevel\n");
-        goto exit;
+        goto setupend;
     }
+
+    setUpStatus = 1;
+
+setupend:
 
     /* Waiting all threads */
     pthread_barrier_wait(&g_threadBarrier1);
+    if (!setUpStatus) {
+        goto compressend;
+    }
 
     /* Start compression benchmark */
     for (loops = 0; loops < nbIterations; loops++) {
@@ -298,7 +308,7 @@ void *benchmark(void *args)
             GETTIME(endTicks);
             if (ZSTD_isError(cSize)) {
                 DISPLAY("Compress failed\n");
-                goto exit;
+                goto compressend;
             }
             tmpDestBuffer += cSize;
             tmpDestSize -= cSize;
@@ -319,7 +329,7 @@ void *benchmark(void *args)
     rc = ZSTD_decompress(decompBuffer, srcSize, destBuffer, cSize);
     if (rc != srcSize) {
         DISPLAY("Decompressed size is not equal to source size\n");
-        goto exit;
+        goto compressend;
     }
     /* Compare original buffer with decompress output */
     if (!memcmp(decompBuffer, srcBuffer, srcSize)) {
@@ -328,7 +338,14 @@ void *benchmark(void *args)
         verifyResult = 0;
     }
 
+    compressStatus = 1;
+
+compressend:
+
     pthread_barrier_wait(&g_threadBarrier2);
+    if (!setUpStatus || !compressStatus) {
+        goto exit;
+    }
     /* Start decompression benchmark */
     for (loops = 0; loops < nbIterations; loops++) {
         unsigned char *tmpDestBuffer = decompBuffer;
@@ -368,7 +385,6 @@ exit:
     ZSTD_freeDCtx(zdc);
     if (threadArgs->benchMode == 1 && matchState) {
         QZSTD_freeSeqProdState(matchState);
-        QZSTD_stopQatDevice();
     }
     if (chunkSizes) {
         free(chunkSizes);
@@ -389,7 +405,7 @@ int main(int argc, const char **argv)
 {
     int argNb, threadNb;
     int nbThreads = 1;
-    pthread_t threads[128];
+    pthread_t threads[2048];
     size_t srcSize, bytesRead;
     unsigned char *srcBuffer = NULL;
     const char *fileName = NULL;
@@ -420,8 +436,8 @@ int main(int argc, const char **argv)
                 case 't':
                     arg++;
                     nbThreads = stringToU32(&arg);
-                    if (nbThreads > 128) {
-                        DISPLAY("Invalid thread parameter, maximum is 128\n");
+                    if (nbThreads > 2048) {
+                        DISPLAY("Invalid thread parameter, maximum is 2048\n");
                         return -1;
                     }
                     break;
@@ -531,6 +547,7 @@ int main(int argc, const char **argv)
 
     pthread_barrier_destroy(&g_threadBarrier1);
     pthread_barrier_destroy(&g_threadBarrier2);
+    QZSTD_stopQatDevice();
     close(inputFile);
     free(srcBuffer);
     return 0;

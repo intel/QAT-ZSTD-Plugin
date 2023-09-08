@@ -37,7 +37,9 @@
  *****************************************************************************
  *      Dependencies
  *****************************************************************************/
+#ifndef ZSTD_STATIC_LINKING_ONLY
 #define ZSTD_STATIC_LINKING_ONLY
+#endif
 #include "zstd.h"
 
 #include <assert.h>
@@ -60,15 +62,26 @@
 #include <string.h> /* memset */
 #include <stdarg.h>
 
+#ifdef INTREE
+#include "qat/cpa.h"
+#include "qat/cpa_dc.h"
+#include "qat/icp_sal_poll.h"
+#include "qat/icp_sal_user.h"
+#else
 #include "cpa.h"
 #include "cpa_dc.h"
 #include "icp_sal_poll.h"
 #include "icp_sal_user.h"
+#endif
 
 #include "qatseqprod.h"
 
 #ifdef ENABLE_USDM_DRV
+#ifdef INTREE
+#include "qat/qae_mem.h"
+#else
 #include "qae_mem.h"
+#endif
 #endif
 
 #define KB                             (1024)
@@ -85,10 +98,6 @@
 
 #define INTER_SZ(src_sz) (2 * (src_sz))
 #define COMPRESS_SRC_BUFF_SZ (ZSTD_BLOCKSIZE_MAX)
-#define DC_CEIL_DIV(x, y) (((x) + (y)-1) / (y))
-/* Formula for GEN4 LZ4S:
-* sourceLen + Ceil(sourceLen/2000) * 11 + 1024 */
-#define INTERMEDIATE_BUFFER_SZ (ZSTD_BLOCKSIZE_MAX + 1024 + DC_CEIL_DIV(ZSTD_BLOCKSIZE_MAX, 2000) * 11)
 
 #define ML_BITS 4
 #define ML_MASK ((1U << ML_BITS) - 1)
@@ -228,9 +237,11 @@ static void QZSTD_free(void *ptr, unsigned char reqPhyContMem)
 {
     if (!reqPhyContMem) {
         free(ptr);
+        ptr = NULL;
     } else {
 #ifdef ENABLE_USDM_DRV
         qaeMemFreeNUMA(&ptr);
+        ptr = NULL;
 #else
         QZSTD_LOG(1, "Don't support QAT USDM driver\n");
 #endif
@@ -298,6 +309,7 @@ static void QZSTD_clearDevices(QZSTD_Hardware_T *qatHw)
         QZSTD_InstanceList_T *inst = QZSTD_getInstance(i, qatHw);
         while (inst) {
             free(inst);
+            inst = NULL;
             inst = QZSTD_getInstance(i, qatHw);
         }
     }
@@ -481,7 +493,7 @@ static int QZSTD_setInstance(unsigned int devId,
     return QZSTD_OK;
 }
 
-const char *getSectionName(void)
+const char *QZSTD_getSectionName(void)
 {
     static char sectionName[SECTION_NAME_SIZE];
     int len;
@@ -500,6 +512,7 @@ const char *getSectionName(void)
 
 static int QZSTD_salUserStart(void)
 {
+#ifndef INTREE
     Cpa32U pcieCount;
 
     if (CPA_STATUS_SUCCESS != icp_adf_get_numDevices(&pcieCount)) {
@@ -512,8 +525,15 @@ static int QZSTD_salUserStart(void)
                   "There is no QAT device available, please check QAT device status\n");
         return QZSTD_FAIL;
     }
+#else
+    if (CPA_TRUE != icp_sal_userIsQatAvailable()) {
+        QZSTD_LOG(1,
+                  "There is no QAT device available, please check QAT device status\n");
+        return QZSTD_FAIL;
+    }
+#endif
 
-    if (CPA_STATUS_SUCCESS != icp_sal_userStart(getSectionName())) {
+    if (CPA_STATUS_SUCCESS != icp_sal_userStart(QZSTD_getSectionName())) {
         QZSTD_LOG(1, "icp_sal_userStart failed\n");
         return QZSTD_FAIL;
     }
@@ -565,6 +585,7 @@ static int QZSTD_getAndShuffleInstance(void)
                 gProcess.dcInstHandle[i], &newInst->instance.instanceInfo)) {
             QZSTD_LOG(1, "cpaDcInstanceGetInfo2 failed\n");
             free(newInst);
+            newInst = NULL;
             goto exit;
         }
 
@@ -572,6 +593,7 @@ static int QZSTD_getAndShuffleInstance(void)
                 gProcess.dcInstHandle[i], &newInst->instance.instanceCap)) {
             QZSTD_LOG(1, "cpaDcQueryCapabilities failed\n");
             free(newInst);
+            newInst = NULL;
             goto exit;
         }
 
@@ -586,6 +608,7 @@ static int QZSTD_getAndShuffleInstance(void)
         if (QZSTD_OK != QZSTD_setInstance(devId, newInst, qatHw)) {
             QZSTD_LOG(1, "QZSTD_setInstance on device %d failed\n", devId);
             free(newInst);
+            newInst = NULL;
             goto exit;
         }
     }
@@ -603,6 +626,7 @@ static int QZSTD_getAndShuffleInstance(void)
         if (!newInst->instance.instanceCap.checksumXXHash32 ||
             !newInst->instance.instanceCap.statelessLZ4SCompression) {
             free(newInst);
+            newInst = NULL;
             continue;
         }
 
@@ -614,6 +638,7 @@ static int QZSTD_getAndShuffleInstance(void)
 #else
         if (newInst->instance.instanceInfo.requiresPhysicallyContiguousMemory) {
             free(newInst);
+            newInst = NULL;
             continue;
         }
         newInst->instance.reqPhyContMem = 0;
@@ -623,6 +648,7 @@ static int QZSTD_getAndShuffleInstance(void)
                sizeof(QZSTD_Instance_T));
         gProcess.dcInstHandle[instanceMatched] = newInst->dcInstHandle;
         free(newInst);
+        newInst = NULL;
         instanceMatched++;
     }
 
@@ -633,6 +659,7 @@ static int QZSTD_getAndShuffleInstance(void)
 
     QZSTD_clearDevices(qatHw);
     free(qatHw);
+    qatHw = NULL;
 
     return QZSTD_OK;
 
@@ -640,6 +667,7 @@ exit:
     if (qatHw) {
         QZSTD_clearDevices(qatHw);
         free(qatHw);
+        qatHw = NULL;
     }
     if (NULL != gProcess.dcInstHandle) {
         free(gProcess.dcInstHandle);
@@ -887,6 +915,7 @@ static int QZSTD_cpaUpdateSess(QZSTD_Session_T *sess, int i)
     }
 
     QZSTD_free(gProcess.qzstdInst[i].cpaSessHandle, reqPhyContMem);
+    gProcess.qzstdInst[i].cpaSessHandle = NULL;
 
     return QZSTD_cpaInitSess(sess, i);
 }
@@ -992,8 +1021,10 @@ void QZSTD_freeSeqProdState(void *sequenceProducerState)
     if (zstdSess) {
         if (zstdSess->qatIntermediateBuf) {
             QZSTD_free(zstdSess->qatIntermediateBuf, zstdSess->reqPhyContMem);
+            zstdSess->qatIntermediateBuf = NULL;
         }
         free(zstdSess);
+        zstdSess = NULL;
     }
 }
 
@@ -1099,6 +1130,7 @@ size_t qatSequenceProducer(
     struct timeval timeStart;
     struct timeval timeNow;
     QZSTD_Session_T *zstdSess = (QZSTD_Session_T *)sequenceProducerState;
+    Cpa32U intermediateBufLen = 0;
 
     if (windowSize < (srcSize < 32 * KB ? srcSize : 32 * KB) || dictSize > 0 ||
         dict) {
@@ -1180,10 +1212,17 @@ size_t qatSequenceProducer(
         }
     }
 
+    if (CPA_STATUS_SUCCESS != cpaDcLZ4SCompressBound(gProcess.dcInstHandle[i],
+            ZSTD_BLOCKSIZE_MAX, &intermediateBufLen)) {
+        QZSTD_LOG(1, "Failed to caculate compress bound\n");
+        rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
+        goto exit;
+    }
+
     /* Allocate intermediate buffer for storing lz4s format compressed by QAT */
     if (NULL == zstdSess->qatIntermediateBuf) {
         zstdSess->qatIntermediateBuf =
-            (unsigned char *)QZSTD_calloc(1, INTERMEDIATE_BUFFER_SZ,
+            (unsigned char *)QZSTD_calloc(1, intermediateBufLen,
                                           zstdSess->reqPhyContMem);
         if (NULL == zstdSess->qatIntermediateBuf) {
             QZSTD_LOG(1, "Failed to allocate memory");
@@ -1203,7 +1242,7 @@ size_t qatSequenceProducer(
 
     gProcess.qzstdInst[i].srcBuffer->pBuffers->dataLenInBytes = srcSize;
     gProcess.qzstdInst[i].destBuffer->pBuffers->dataLenInBytes =
-        INTERMEDIATE_BUFFER_SZ;
+        intermediateBufLen;
 
     memset(&opData, 0, sizeof(CpaDcOpData));
     opData.inputSkipData.skipMode = CPA_DC_SKIP_DISABLED;
@@ -1265,7 +1304,7 @@ size_t qatSequenceProducer(
 
     if (gProcess.qzstdInst[i].res.consumed < srcSize ||
         gProcess.qzstdInst[i].res.produced == 0 ||
-        gProcess.qzstdInst[i].res.produced > INTERMEDIATE_BUFFER_SZ ||
+        gProcess.qzstdInst[i].res.produced > intermediateBufLen ||
         CPA_STATUS_SUCCESS != gProcess.qzstdInst[i].res.status) {
         QZSTD_LOG(1,
                   "QAT result error, srcSize: %lu, consumed: %d, produced: %d, res.status:%d\n",

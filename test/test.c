@@ -44,7 +44,9 @@
 
 #include "qatseqprod.h"
 
+#ifndef ZSTD_STATIC_LINKING_ONLY
 #define ZSTD_STATIC_LINKING_ONLY
+#endif
 #include "zstd.h"
 #include "zstd_errors.h"
 
