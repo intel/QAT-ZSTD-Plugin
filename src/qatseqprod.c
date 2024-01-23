@@ -76,12 +76,10 @@
 
 #include "qatseqprod.h"
 
-#ifdef ENABLE_USDM_DRV
 #ifdef INTREE
 #include "qat/qae_mem.h"
 #else
 #include "qae_mem.h"
-#endif
 #endif
 
 #define KB                             (1024)
@@ -221,11 +219,7 @@ static void *QZSTD_calloc(size_t nb, size_t size, unsigned char reqPhyContMem)
     if (!reqPhyContMem) {
         return calloc(nb, size);
     } else {
-#ifdef ENABLE_USDM_DRV
         return qaeMemAllocNUMA(nb * size, 0, 64);
-#else
-        return NULL;
-#endif
     }
 }
 
@@ -239,12 +233,8 @@ static void QZSTD_free(void *ptr, unsigned char reqPhyContMem)
         free(ptr);
         ptr = NULL;
     } else {
-#ifdef ENABLE_USDM_DRV
         qaeMemFreeNUMA(&ptr);
         ptr = NULL;
-#else
-        QZSTD_LOG(1, "Don't support QAT USDM driver\n");
-#endif
     }
 }
 
@@ -253,11 +243,7 @@ static void QZSTD_free(void *ptr, unsigned char reqPhyContMem)
  */
 static __inline CpaPhysicalAddr QZSTD_virtToPhys(void *virtAddr)
 {
-#ifdef ENABLE_USDM_DRV
     return (CpaPhysicalAddr)qaeVirtToPhysNUMA(virtAddr);
-#else
-    return (CpaPhysicalAddr)virtAddr;
-#endif
 }
 
 static QZSTD_InstanceList_T *QZSTD_getInstance(unsigned int devId,
@@ -630,19 +616,11 @@ static int QZSTD_getAndShuffleInstance(void)
             continue;
         }
 
-#ifdef ENABLE_USDM_DRV
-        /* If enable USDM driver support, we always use physically contiguous memory without
-         * checking instance flag requiresPhysicallyContiguousMemory.
-         */
-        newInst->instance.reqPhyContMem = 1;
-#else
         if (newInst->instance.instanceInfo.requiresPhysicallyContiguousMemory) {
-            free(newInst);
-            newInst = NULL;
-            continue;
+            newInst->instance.reqPhyContMem = 1;
+        } else {
+            newInst->instance.reqPhyContMem = 0;
         }
-        newInst->instance.reqPhyContMem = 0;
-#endif
 
         memcpy(&gProcess.qzstdInst[instanceMatched], &newInst->instance,
                sizeof(QZSTD_Instance_T));
