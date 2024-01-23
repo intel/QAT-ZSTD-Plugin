@@ -40,17 +40,11 @@ default: qatseqprodfuzzer.o
 
 all: qatseqprodfuzzer.o
 
-ENABLE_USDM_DRV ?= 0
-ifneq ($(ENABLE_USDM_DRV), 0)
-		QATFLAGS += -DENABLE_USDM_DRV
-endif
-
 ifneq ($(ICP_ROOT), )
 	QATFLAGS = -I$(ICP_ROOT)/quickassist/include	\
 			-I$(ICP_ROOT)/quickassist/include/dc	\
-			-I$(ICP_ROOT)/quickassist/lookaside/access_layer/include
-	ifneq ($(ENABLE_USDM_DRV), 0)
-		QATFLAGS += -I$(ICP_ROOT)/quickassist/utilities/libusdm_drv
+			-I$(ICP_ROOT)/quickassist/lookaside/access_layer/include \
+			-I$(ICP_ROOT)/quickassist/utilities/libusdm_drv
 	endif
 else
 	QATFLAGS = -DINTREE

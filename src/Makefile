@@ -42,23 +42,16 @@ INCLUDEDIR ?= $(INSTALLDIR)/include
 
 CP ?= cp
 
-ENABLE_USDM_DRV ?= 0
 ifneq ($(ICP_ROOT), )
 	QATFLAGS = -I$(ICP_ROOT)/quickassist/include	\
 		   	   -I$(ICP_ROOT)/quickassist/include/dc	\
-		       -I$(ICP_ROOT)/quickassist/lookaside/access_layer/include
-	LDFLAGS  = -Wl,-rpath,$(ICP_ROOT)/build -L$(ICP_ROOT)/build -lqat_s
-	ifneq ($(ENABLE_USDM_DRV), 0)
-		QATFLAGS += -I$(ICP_ROOT)/quickassist/utilities/libusdm_drv -DENABLE_USDM_DRV
-		LDFLAGS  += -lusdm_drv_s
-	endif
+		       -I$(ICP_ROOT)/quickassist/lookaside/access_layer/include \
+			   -I$(ICP_ROOT)/quickassist/utilities/libusdm_drv
+	LDFLAGS  = -Wl,-rpath,$(ICP_ROOT)/build -L$(ICP_ROOT)/build -lqat_s \
+			   -lusdm_drv_s
 else
 	QATFLAGS = -DINTREE
-	LDFLAGS  = -lqat
-	ifneq ($(ENABLE_USDM_DRV), 0)
-		QATFLAGS += -DENABLE_USDM_DRV
-		LDFLAGS	 += -lusdm
-	endif
+	LDFLAGS  = -lqat -lusdm
 endif
 
 ifdef ZSTDLIB

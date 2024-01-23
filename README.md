@@ -98,17 +98,13 @@ If ZSTD* 1.5.4 library is not installed, need to specify path to ZSTD* lib sourc
     make ZSTDLIB=[PATH TO ZSTD LIB SOURCE]
 ```
 
-### Build QAT sequence producer library with USDM support
+### USDM support
 
 If SVM is not enabled, memory passed to Intel® QuickAssist Technology hardware must be DMA’able.
 
 Intel provides a User Space DMA-able Memory (USDM) component (kernel driver and corresponding user space library) which allocates/frees DMA-able memory, mapped to user space, performs virtual to physical address translation on memory allocated by this library. Please refer to [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide][7] chapter 3.3.
 
-To enable USDM, please compile with "ENABLE_USDM_DRV=1".
-
-```bash
-    make ENABLE_USDM_DRV=1
-```
+QAT ZSTD Plugin will automatically switch to USDM mode when SVM is not enabled.
 
 ### Build and run test program
 
@@ -118,12 +114,6 @@ To enable USDM, please compile with "ENABLE_USDM_DRV=1".
 ```
 
 ### Build and run benchmark tool
-
-If SVM is not enabled, please compile with "ENABLE_USDM_DRV=1".
-
-```bash
-    make benchmark ENABLE_USDM_DRV=1
-```
 
 The `benchmark` is a tool used to perform QAT sequence producer performance tests, it supports the following options:
 
