@@ -932,7 +932,7 @@ static void QZSTD_setupSess(QZSTD_Session_T *zstdSess)
 {
     zstdSess->instHint = -1;
     zstdSess->sessionSetupData.compType = CPA_DC_LZ4S;
-    zstdSess->sessionSetupData.autoSelectBestHuffmanTree = CPA_DC_ASB_DISABLED;
+    zstdSess->sessionSetupData.autoSelectBestHuffmanTree = CPA_DC_ASB_ENABLED;
     zstdSess->sessionSetupData.sessDirection = CPA_DC_DIR_COMPRESS;
     zstdSess->sessionSetupData.sessState = CPA_DC_STATELESS;
     zstdSess->sessionSetupData.checksum = CPA_DC_XXHASH32;
@@ -1295,8 +1295,16 @@ size_t qatSequenceProducer(
               srcSize, gProcess.qzstdInst[i].res.consumed,
               gProcess.qzstdInst[i].res.produced);
 
-    rc = QZSTD_decLz4s(outSeqs, outSeqsCapacity, zstdSess->qatIntermediateBuf,
-                       gProcess.qzstdInst[i].res.produced);
+    /* If source data is uncompressed, create one sequence */
+    if (CPA_TRUE == gProcess.qzstdInst[i].res.dataUncompressed) {
+        outSeqs[0].litLength = srcSize;
+        outSeqs[0].offset = 0;
+        outSeqs[0].matchLength = 0;
+        rc = 1;
+    } else {
+        rc = QZSTD_decLz4s(outSeqs, outSeqsCapacity, zstdSess->qatIntermediateBuf,
+                           gProcess.qzstdInst[i].res.produced);
+    }
     assert(rc < (outSeqsCapacity - 1));
     QZSTD_LOG(2, "Produced %lu sequences\n", rc);
 
