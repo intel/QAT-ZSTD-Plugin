@@ -43,9 +43,15 @@ else
 endif
 
 ifdef ZSTDLIB
-LDFLAGS += $(ZSTDLIB)/libzstd.a -I$(ZSTDLIB)
+LDFLAGS += $(ZSTDLIB)/libzstd.a -lzstd
 else
-LDFLAGS += /usr/local/lib/libzstd.a
+ZSTDLIB := $(shell find /usr /lib /local -name 'libzstd.a' 2>/dev/null | head -n 1)
+ZSTDLIB ?= /usr/local/lib/libzstd.a
+ifneq ("$(wildcard $(ZSTDLIB))","")
+    LDFLAGS += -L$(dir $(ZSTDLIB)) -lzstd
+else
+    $(error libzstd.a not found, please install libzstd or specify the path manually)
+endif
 endif
 
 default: test benchmark
