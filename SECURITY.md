@@ -1,5 +1,6 @@
 # Security Policy
+Intel is committed to rapidly addressing security vulnerabilities affecting our customers and providing clear guidance on the solution, impact, severity and mitigation.
 
 ## Reporting a Security Vulnerability
 
-Visit https://intel.com/security for information on how to report security vulnerabilities. Do not report any security vulnerability as a regular issue in this repository.
+Please report any security vulnerabilities in this project utilizing the guidelines [here](https://www.intel.com/content/www/us/en/security-center/vulnerability-handling-guidelines.html).
