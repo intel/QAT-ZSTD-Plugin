@@ -36,11 +36,16 @@
 .PHONY: default
 default: lib
 
-INSTALLDIR ?= /usr/local
-LIBDIR     ?= $(INSTALLDIR)/lib
-INCLUDEDIR ?= $(INSTALLDIR)/include
+DESTDIR     ?=
+PREFIX      ?= /usr/local
+LIBDIR      ?= $(PREFIX)/lib
+INCLUDEDIR  ?= $(PREFIX)/include
 
 CP ?= cp
+INSTALL ?= install
+
+INSTALL_PROGRAM ?= $(INSTALL)
+INSTALL_DATA    ?= $(INSTALL) -m 644
 
 ifneq ($(ICP_ROOT), )
 	QATFLAGS = -I$(ICP_ROOT)/quickassist/include	\
@@ -56,14 +61,6 @@ endif
 
 ifdef ZSTDLIB
 CFLAGS   += -I$(ZSTDLIB)
-else
-ZSTDLIB := $(shell find /usr /lib /local -name 'libzstd.a' 2>/dev/null | head -n 1)
-ZSTDLIB ?= /usr/local/lib/libzstd.a
-ifneq ("$(wildcard $(ZSTDLIB))","")
-    CFLAGS += -I$(dir $(ZSTDLIB))
-else
-    $(error libzstd.a not found, please install libzstd or specify the path manually)
-endif
 endif
 
 CFLAGS += -Wall -Werror -Wextra -Wcast-align -Wshadow -Wstrict-aliasing=1 \
@@ -91,9 +88,11 @@ lib: qatseqprod.o
 
 .PHONY: install
 install: lib
-	$(CP) libqatseqprod.a $(LIBDIR)
-	$(CP) libqatseqprod.so $(LIBDIR)
-	$(CP) qatseqprod.h $(INCLUDEDIR)
+	[ -e $(DESTDIR)$(LIBDIR) ] || $(INSTALL) -d -m 755 $(DESTDIR)$(LIBDIR)/
+	[ -e $(DESTDIR)$(INCLUDEDIR) ] || $(INSTALL) -d -m 755 $(DESTDIR)$(INCLUDEDIR)/
+	$(INSTALL_PROGRAM) libqatseqprod.so $(DESTDIR)$(LIBDIR)
+	$(INSTALL_DATA) libqatseqprod.a $(DESTDIR)$(LIBDIR)
+	$(INSTALL_DATA) qatseqprod.h $(DESTDIR)$(INCLUDEDIR)
 	@echo qatseqprod library successfully installed
 
 .PHONY: uninstall
