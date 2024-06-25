@@ -33,7 +33,7 @@
 #
 # #######################################################################
 
-LIBDIR  = src
+SRCDIR  = src
 TESTDIR = test
 
 .PHONY: default
@@ -41,7 +41,7 @@ default: lib
 
 .PHONY: lib
 lib:
-	$(Q)$(MAKE) -C $(LIBDIR) $@
+	$(Q)$(MAKE) -C $(SRCDIR) $@
 
 .PHONY: test
 test:
@@ -53,12 +53,24 @@ benchmark:
 
 .PHONY: install
 install:
-	$(Q)$(MAKE) -C $(LIBDIR) $@
+	$(Q)$(MAKE) -C $(SRCDIR) $@
 
 .PHONY: uninstall
 uninstall:
-	$(Q)$(MAKE) -C $(LIBDIR) $@
+	$(Q)$(MAKE) -C $(SRCDIR) $@
 
 clean:
-	$(Q)$(MAKE) -C $(LIBDIR) $@
+	$(Q)$(MAKE) -C $(SRCDIR) $@
 	$(Q)$(MAKE) -C $(TESTDIR) $@
+
+########################
+# RPM package building #
+########################
+rpm:
+	mkdir -p rpmbuild/BUILD rpmbuild/RPMS rpmbuild/SOURCES rpmbuild/SPECS rpmbuild/SRPMS
+	rpmbuild --undefine=_disable_source_fetch --define "_topdir $(PWD)/rpmbuild" -ba qat_zstd_plugin.spec
+
+rpmclean:
+	@rm -fr rpmbuild
+
+.PHONY: rpm rpmclean

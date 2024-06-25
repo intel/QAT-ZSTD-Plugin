@@ -47,10 +47,10 @@ extern "C" {
 /**
  * Version
  */
-#define QZSTD_VERSION          "0.0.1"
+#define QZSTD_VERSION          "0.1.0"
 #define QZSTD_VERSION_MAJOR    0
-#define QZSTD_VERSION_MINOR    0
-#define QZSTD_VERSION_RELEASE  1
+#define QZSTD_VERSION_MINOR    1
+#define QZSTD_VERSION_RELEASE  0
 #define QZSTD_VERSION_NUMBER  (QZSTD_VERSION_MAJOR *100*100 + QZSTD_VERSION_MINOR *100 \
                                 + QZSTD_VERSION_RELEASE)
 
