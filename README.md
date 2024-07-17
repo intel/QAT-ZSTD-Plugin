@@ -34,6 +34,8 @@ Intel® 4xxx (Intel® QuickAssist Technology Gen 4)
 
 ZSTD* library of version 1.5.4+
 
+[public ZSTD-lib][11]
+
 [Intel® QAT Driver for Linux* Hardware v2.0][2] or [Intel® QuickAssist Technology Library (QATlib)][3] of version 22.07.0+
 
 ## Limitations
@@ -43,7 +45,7 @@ ZSTD* library of version 1.5.4+
  3. The ZSTD_c_enableLongDistanceMatching cParam is not currently supported. Compression will fail if it is enabled and tries to compress with QAT sequence producer.
  4. Dictionaries are not currently supported. Compression will succeed if the dictionary is referenced, but the dictionary will have no effect.
  5. Stream history is not currently supported. All advanced ZSTD* compression APIs, including streaming APIs, work with QAT sequence producer, but each block is treated as an independent chunk without history from previous blocks.
- 6. Multi-threading within a single compression is not currently supported. In other words, compression will fail if `ZSTD_c_nbWorkers` > 0 and an external sequence producer is registered. Multi-threading across compressions is fine: simply create one CCtx per thread.
+ 6. Multi-threading within a single compression is not currently supported. In other words, compression will fail if `ZSTD_c_nbWorkers` > 0 and an external sequence producer is registered. Each thread must have its own context (CCtx).
 
 For more details about ZSTD* sequence producer, please refer to [zstd.h][4].
 
@@ -82,11 +84,18 @@ QATlib has been upstream to some platforms, RedHat, SUSE. Users also can install
 
 ### Build QAT sequence producer library
 
-Shared Virtual Memory (SVM) allows direct submission of an applications buffer, thus removing the memcpy cycle cost, cache thrashing, and memory bandwidth. The SVM feature enables passing virtual addresses to the QAT hardware for processing acceleration requests.
+Before build, set the QATlib environment variables to prevent compilation errors.
+
+```bash
+export LIBRARY_PATH=/usr/local/lib
+export LD_LIBRARY_PATH=/usr/local/lib
+```
+
+Shared Virtual Memory (SVM) allows direct submission of an application buffer, thus removing the memcpy cycle cost, cache thrashing, and memory bandwidth. The SVM feature enables passing virtual addresses to the QAT hardware for processing acceleration requests.
 
 QAT sequence producer library runs on the SVM environment by default.
 
-To enable SVM, please refer to [Using Intel® Virtualization Technology (Intel® VT) with Intel® QuickAssist Technology][6] to update the BIOS and [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide][7] chapter 3.3 to update driver configuration.
+To enable SVM, please refer to [Using Intel® Virtualization Technology (Intel® VT) with Intel® QuickAssist Technology][6] to update the BIOS and [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide][7] to update driver configuration.
 
 ```bash
     make
@@ -100,9 +109,9 @@ If ZSTD* 1.5.4 library is not installed, need to specify path to ZSTD* lib sourc
 
 ### USDM support
 
-If SVM is not enabled, memory passed to Intel® QuickAssist Technology hardware must be DMA’able.
+If SVM is not enabled, memory passed to Intel® QuickAssist Technology hardware must be DMA enabled.
 
-Intel provides a User Space DMA-able Memory (USDM) component (kernel driver and corresponding user space library) which allocates/frees DMA-able memory, mapped to user space, performs virtual to physical address translation on memory allocated by this library. Please refer to [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide][7] chapter 3.3.
+Intel provides a User Space DMA-able Memory (USDM) component (kernel driver and corresponding user space library) which allocates/frees DMA-able memory, mapped to user space, performs virtual to physical address translation on memory allocated by this library. Please refer to [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide][7].
 
 QAT ZSTD Plugin will automatically switch to USDM mode when SVM is not enabled.
 
@@ -127,8 +136,10 @@ The `benchmark` is a tool used to perform QAT sequence producer performance test
 ```
 
 In order to get a better performance, increasing the number of threads with `-t` is a better way. The number of dc instances provided by Intel® QAT needs to be increased while increasing test threads, it can be increased by modifying the `NumberDcInstances` in `/etc/4xxx_devx.conf`. Note that the test threads number should not exceed the number of dc instances, as this ensures that each test thread can obtain a dc instance.
-For more Intel® QAT configuration information, please refer to [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide][7] chapter 5.
+For more Intel® QAT configuration information, please refer to [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide][7].
 An example usage of benchmark tool with [Silesia compression corpus][9]:
+
+Silesia is standard lossless data compression corpora.
 
 ```bash
    ./benchmark -m1 -l100 -c64K -t64 -E2 Silesia
@@ -167,7 +178,7 @@ which used the following Intel® QAT configuration file:
 ```
 
 ### How to integrate QAT sequence producer into `zstd`
-Integrating QAT sequence producer into the `zstd` command can speed up its compression, The following sample code shows how to enable QAT sequence producer by modifying the code of `FIO_compressZstdFrame` in `zstd/programs/fileio.c`.
+Integrating QAT sequence producer into the `zstd` command can speed up its compression, The following sample code shows how to enable QAT sequence producer by modifying the code of `FIO_compressZstdFrame` in `zstd/programs/fileio.c`, including qatseqprod.h in fileio.c and adding -lqatseqprod into Makefile.
 
 Start QAT device and register qatSequenceProducer before starting compression job.
 
@@ -184,7 +195,7 @@ Start QAT device and register qatSequenceProducer before starting compression jo
         qatSequenceProducer
     );
     /* Enable sequence producer fallback */
-    ZSTD_CCtx_setParameter(ress.cctx,, ZSTD_c_enableSeqProducerFallback, 1);
+    ZSTD_CCtx_setParameter(ress.cctx, ZSTD_c_enableSeqProducerFallback, 1);
 ```
 
 Stop QAT device after compression job
@@ -250,6 +261,7 @@ No changes to the application with calling ZSTD* compression API, keep calling `
 ```
 
 Then link to libzstd and libqatseqprod like test program did.
+See the DEMO in test/test.c file
 
 ## Legal
 
@@ -271,7 +283,8 @@ Intel, the Intel logo are trademarks of Intel Corporation in the U.S. and/or oth
 [4]:https://github.com/facebook/zstd/blob/dev/lib/zstd.h
 [5]:https://www.intel.com/content/www/us/en/content-details/632506/intel-quickassist-technology-intel-qat-software-for-linux-getting-started-guide-hardware-version-2-0.html
 [6]:https://www.intel.com/content/www/us/en/content-details/709210/using-intel-virtualization-technology-intel-vt-with-intel-quickassist-technology-application-note.html
-[7]:https://www.intel.com/content/www/us/en/content-details/743912/intel-quickassist-technology-intel-qat-software-for-linux-programmers-guide-hardware-version-2-0.html
+[7]:https://intel.github.io/quickassist/PG/index.html
 [8]:https://github.com/intel/qatlib/blob/main/INSTALL
 [9]:https://sun.aei.polsl.pl//~sdeor/index.php?page=silesia
 [10]:https://github.com/facebook/zstd/blob/dev/doc/zstd_manual.html
+[11]:https://github.com/facebook/zstd
