@@ -630,8 +630,8 @@ static int QZSTD_getAndShuffleInstance(void)
         instanceMatched++;
     }
 
-    if (instanceMatched == 0) {
-        QZSTD_LOG(1, "No instance matched\n");
+    if (0 == instanceMatched) {
+        QZSTD_LOG(1, "No instance with matching capabilities\n");
         goto exit;
     }
 
@@ -655,7 +655,12 @@ exit:
         free(gProcess.qzstdInst);
         gProcess.qzstdInst = NULL;
     }
-    return QZSTD_FAIL;
+
+    if (instanceFound && 0 == instanceMatched) {
+        return QZSTD_UNSUPPORTED;
+    } else {
+        return QZSTD_FAIL;
+    }
 }
 
 static void QZSTD_dcCallback(void *cbDataTag, CpaStatus stat)
