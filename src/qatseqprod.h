@@ -60,7 +60,8 @@ extern "C" {
 typedef enum {
     QZSTD_OK = 0,       /* Success */
     QZSTD_STARTED = 1,  /* QAT device started */
-    QZSTD_FAIL = -1     /* Unspecified error */
+    QZSTD_FAIL = -1,    /* Unspecified error */
+    QZSTD_UNSUPPORTED = -2 /* Unsupport */
 } QZSTD_Status_e;
 
 /** QZSTD_version:
@@ -124,6 +125,7 @@ size_t qatSequenceProducer(
  *  @retval QZSTD_STARTED   QAT device is started, but the capability does not
  *                          meet the requirements.
  *  @retval QZSTD_FAIL      Failed to start QAT device.
+ *  @retval QZSTD_UNSUPPORTED QAT device or current configuration didn't support LZ4s and postprocessing.
  */
 int QZSTD_startQatDevice(void);
 
