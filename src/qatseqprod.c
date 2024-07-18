@@ -42,7 +42,6 @@
 #endif
 #include "zstd.h"
 
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -1071,7 +1070,10 @@ static size_t QZSTD_decLz4s(ZSTD_Sequence *outSeqs, size_t outSeqsCapacity,
                       literalLen, offset, matchlen);
             histLiteralLen = 0;
             ++seqsIdx;
-            assert(seqsIdx < (outSeqsCapacity - 1));
+            if (seqsIdx >= (outSeqsCapacity - 1)) {
+                QZSTD_LOG(1, "Sequence exceed capacity\n");
+                return ZSTD_SEQUENCE_PRODUCER_ERROR;
+            }
         } else {
             if (literalLen > 0) {
                 /* When match length is 0, the literalLen needs to be
@@ -1081,7 +1083,10 @@ static size_t QZSTD_decLz4s(ZSTD_Sequence *outSeqs, size_t outSeqsCapacity,
             }
         }
     }
-    assert(ip == endip);
+    if (ip != endip) {
+        QZSTD_LOG(1, "Unexpected decode error\n");
+        return ZSTD_SEQUENCE_PRODUCER_ERROR;
+    }
     return ++seqsIdx;
 }
 
@@ -1310,7 +1315,11 @@ size_t qatSequenceProducer(
         rc = QZSTD_decLz4s(outSeqs, outSeqsCapacity, zstdSess->qatIntermediateBuf,
                            gProcess.qzstdInst[i].res.produced);
     }
-    assert(rc < (outSeqsCapacity - 1));
+    if (rc >= (outSeqsCapacity - 1) || ZSTD_SEQUENCE_PRODUCER_ERROR == rc) {
+        QZSTD_LOG(1, "Decode error\n");
+        rc = ZSTD_SEQUENCE_PRODUCER_ERROR;
+        goto error;
+    }
     QZSTD_LOG(2, "Produced %lu sequences\n", rc);
 
 error:
