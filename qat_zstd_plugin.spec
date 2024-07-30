@@ -1,5 +1,5 @@
 Name:		qat-zstd-plugin
-Version:	0.1.0
+Version:	0.2.0
 Release:	%autorelease
 Summary:	Intel QuickAssist Technology ZSTD Plugin
 
@@ -53,4 +53,5 @@ export LD_LIBRARY_PATH=%{buildroot}/%{_libdir}
 %{_includedir}/qatseqprod.h
 
 %changelog
-%autochangelog
+* Tue Jul 30 2024 Zhu Chengfei <chengfeix.zhu@intel.com> - 0.2.0-1
+- Update to qat-zstd-plugin v0.2.0
