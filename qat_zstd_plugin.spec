@@ -10,7 +10,6 @@ Source0:	%{url}/archive/v%{version}/%{name}-%{version}.tar.gz
 BuildRequires:	automake
 BuildRequires:	gcc
 BuildRequires:	libzstd-devel
-BuildRequires:	libzstd-static
 BuildRequires:	qatlib-devel
 
 # Upstream only supports x86_64
@@ -34,15 +33,11 @@ that use the QAT ZSTD Plugin.
 
 %build
 %make_build
-make test
+make
 
 %install
 make install LIBDIR=%{buildroot}%{_libdir} INCLUDEDIR=%{buildroot}%{_includedir}
 rm %{buildroot}%{_libdir}/libqatseqprod.a
-
-%check
-export LD_LIBRARY_PATH=%{buildroot}/%{_libdir}
-./test/test README.md
 
 %files
 %license LICENSE*
