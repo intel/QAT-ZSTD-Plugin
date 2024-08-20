@@ -281,7 +281,7 @@ Intel, the Intel logo are trademarks of Intel Corporation in the U.S. and/or oth
 [4]:https://github.com/facebook/zstd/blob/dev/lib/zstd.h
 [5]:https://www.intel.com/content/www/us/en/content-details/632506/intel-quickassist-technology-intel-qat-software-for-linux-getting-started-guide-hardware-version-2-0.html
 [6]:https://www.intel.com/content/www/us/en/content-details/709210/using-intel-virtualization-technology-intel-vt-with-intel-quickassist-technology-application-note.html
-[7]:https://www.intel.com/content/www/us/en/content-details/743912/intel-quickassist-technology-intel-qat-software-for-linux-programmers-guide-hardware-version-2-0.html
+[7]:https://intel.github.io/quickassist/PG/index.html
 [8]:https://github.com/intel/qatlib/blob/main/INSTALL
 [9]:https://sun.aei.polsl.pl//~sdeor/index.php?page=silesia
 [10]:https://github.com/facebook/zstd/blob/dev/doc/zstd_manual.html
