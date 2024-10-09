@@ -79,18 +79,27 @@ else
 	QATFLAGS += -O3
 endif
 
+VERSION_MAJOR=0
+VERSION_MINOR=2
+VERSION_PATCH=0
+VERSION=$(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_PATCH)
+
 qatseqprod.o: qatseqprod.c
 	$(CC) -c $(CFLAGS) $(QATFLAGS) $(DEBUGFLAGS) $^ -o $@
 
 lib: qatseqprod.o
 	$(AR) rc libqatseqprod.a $^
-	$(CC) -shared $^ $(LDFLAGS) -o libqatseqprod.so
+	$(CC) -shared $^ $(LDFLAGS) -Wl,-soname,libqatseqprod.so.$(VERSION_MAJOR) -o libqatseqprod.so.$(VERSION)
+	ln -sf libqatseqprod.so.$(VERSION) libqatseqprod.so.$(VERSION_MAJOR)
+	ln -sf libqatseqprod.so.$(VERSION_MAJOR) libqatseqprod.so
 
 .PHONY: install
 install: lib
 	[ -e $(DESTDIR)$(LIBDIR) ] || $(INSTALL) -d -m 755 $(DESTDIR)$(LIBDIR)/
 	[ -e $(DESTDIR)$(INCLUDEDIR) ] || $(INSTALL) -d -m 755 $(DESTDIR)$(INCLUDEDIR)/
-	$(INSTALL_PROGRAM) libqatseqprod.so $(DESTDIR)$(LIBDIR)
+	$(INSTALL_PROGRAM) libqatseqprod.so.$(VERSION) $(DESTDIR)$(LIBDIR)
+	ln -sf libqatseqprod.so.$(VERSION) $(DESTDIR)$(LIBDIR)/libqatseqprod.so.$(VERSION_MAJOR)
+	ln -sf libqatseqprod.so.$(VERSION_MAJOR) $(DESTDIR)$(LIBDIR)/libqatseqprod.so
 	$(INSTALL_DATA) libqatseqprod.a $(DESTDIR)$(LIBDIR)
 	$(INSTALL_DATA) qatseqprod.h $(DESTDIR)$(INCLUDEDIR)
 	@echo qatseqprod library successfully installed
@@ -98,10 +107,12 @@ install: lib
 .PHONY: uninstall
 uninstall:
 	$(RM) $(LIBDIR)/libqatseqprod.a
+	$(RM) $(LIBDIR)/libqatseqprod.so.$(VERSION)
+	$(RM) $(LIBDIR)/libqatseqprod.so.$(VERSION_MAJOR)
 	$(RM) $(LIBDIR)/libqatseqprod.so
 	$(RM) $(INCLUDEDIR)/qatseqprod.h
 	@echo qatseqprod library successfully uninstalled
 
 clean:
 	$(RM) *.o
-	$(RM) libqatseqprod.a libqatseqprod.so
+	$(RM) libqatseqprod.a libqatseqprod.so libqatseqprod.so.$(VERSION) libqatseqprod.so.$(VERSION_MAJOR)
