@@ -34,24 +34,12 @@
 # #######################################################################
 LIB     = ../src
 
-LDFLAGS = $(LIB)/libqatseqprod.a -I$(LIB)
+LDFLAGS = -L$(LIB) -I$(LIB)
 
 ifneq ($(ICP_ROOT), )
 	LDFLAGS += -lqat_s -lusdm_drv_s -Wl,-rpath,$(ICP_ROOT)/build -L$(ICP_ROOT)/build
 else
-	LDFLAGS += -lqat -lusdm
-endif
-
-ifdef ZSTDLIB
-LDFLAGS += $(ZSTDLIB)/libzstd.a
-else
-ZSTDLIB := $(shell find /usr /lib /local -name 'libzstd.a' 2>/dev/null | head -n 1)
-ZSTDLIB ?= /usr/local/lib/libzstd.a
-ifneq ("$(wildcard $(ZSTDLIB))","")
-    LDFLAGS += $(ZSTDLIB)
-else
-    $(error libzstd.a not found, please install libzstd or specify the path manually)
-endif
+	LDFLAGS += -lzstd -lqatseqprod -lqat -lusdm
 endif
 
 default: test benchmark
