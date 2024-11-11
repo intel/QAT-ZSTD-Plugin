@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: MIT
+
 Name:		qat-zstd-plugin
 Version:	0.2.0
 Release:	%autorelease
