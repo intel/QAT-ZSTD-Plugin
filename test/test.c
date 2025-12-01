@@ -99,6 +99,10 @@ int main(int argc, char *argv[])
     }
 
     dstBufferSize = ZSTD_compressBound(inputFileSize);
+    if (ZSTD_isError(dstBufferSize)) {
+        printf("Error too much input: %s\n", inputFileSize);
+        goto exit;
+    }
 
     srcBuffer = (unsigned char *)malloc(inputFileSize);
     assert(srcBuffer != NULL);
@@ -136,7 +140,8 @@ int main(int argc, char *argv[])
     );
 
     res = ZSTD_CCtx_setParameter(zc, ZSTD_c_enableSeqProducerFallback, 1);
-    if ((int)res <= 0) {
+
+    if (ZSTD_isError(res)) {
         printf("Failed to set fallback\n");
         goto exit;
     }
@@ -144,15 +149,15 @@ int main(int argc, char *argv[])
     /* compress */
     cSize = ZSTD_compress2(zc, dstBuffer, dstBufferSize, srcBuffer,
                            (size_t)bytesRead);
-    if ((int)cSize <= 0) {
-        printf("Compress failed\n");
+    if (ZSTD_isError(cSize)) {
+        printf("Compress failed with error %d \n", cSize);
         goto exit;
     }
 
     /* decompress */
     res = ZSTD_decompress(decompBuffer, (size_t)bytesRead, dstBuffer, cSize);
-    if (res != (size_t)bytesRead) {
-        printf("Decompressed size is not equal to source size\n");
+    if (ZSTD_isError(res) || res != (size_t)bytesRead) {
+        printf("Decompression error\n");
         goto exit;
     }
 
